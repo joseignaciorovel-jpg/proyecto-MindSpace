@@ -116,6 +116,38 @@
         "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp of register" }
       },
       "required": ["patientRut", "patientEmail", "mood", "sleepScore", "sleepHours", "ownerId"]
+    },
+    "ClinicalAudit": {
+      "title": "ClinicalAudit",
+      "description": "Access tracking records for patient profiles and actions done within clinical scopes",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "patientId": { "type": "string" },
+        "patientName": { "type": "string" },
+        "action": { "type": "string" },
+        "details": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "ipAddress": { "type": "string" },
+        "userAgent": { "type": "string" },
+        "operatorEmail": { "type": "string" },
+        "ownerId": { "type": "string" }
+      },
+      "required": ["patientId", "action", "ownerId"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Electronic signature tracking records for clinical evolution notes",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "patientId": { "type": "string" },
+        "patientName": { "type": "string" },
+        "action": { "type": "string" },
+        "detail": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["patientId", "action", "detail"]
     }
   },
   "firestore": {
@@ -142,6 +174,14 @@
     "/mood_journals/{journalId}": {
       "schema": "MoodJournal",
       "description": "CBT mood and sleep daily tracks recorded securely by patients"
+    },
+    "/clinical_audits/{auditId}": {
+      "schema": "ClinicalAudit",
+      "description": "Electronic audit logs for patient privacy compliance under Chilean laws"
+    },
+    "/audit_logs/{logId}": {
+      "schema": "AuditLog",
+      "description": "Electronic audit/signature registers designed to prevent alteration"
     }
   }
 }

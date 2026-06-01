@@ -127,6 +127,28 @@ service cloud.firestore {
           && data.createdAt is timestamp;
     }
 
+    function isValidClinicalAudit(data) {
+      return data.keys().hasAll(['patientId', 'patientName', 'action', 'details', 'timestamp', 'ipAddress', 'userAgent', 'operatorEmail', 'ownerId']) && data.keys().size() == 9
+          && data.patientId is string && data.patientId.size() <= 128
+          && data.patientName is string && data.patientName.size() <= 128
+          && data.action is string && data.action.size() <= 128
+          && data.details is string && data.details.size() <= 4096
+          && data.timestamp is timestamp
+          && data.ipAddress is string && data.ipAddress.size() <= 64
+          && data.userAgent is string && data.userAgent.size() <= 512
+          && data.operatorEmail is string && data.operatorEmail.size() <= 128
+          && data.ownerId is string && data.ownerId.size() <= 128;
+    }
+
+    function isValidAuditLog(data) {
+      return data.keys().hasAll(['patientId', 'patientName', 'action', 'detail', 'timestamp']) && data.keys().size() == 5
+          && data.patientId is string && data.patientId.size() <= 128
+          && data.patientName is string && data.patientName.size() <= 128
+          && data.action is string && data.action.size() <= 128
+          && data.detail is string && data.detail.size() <= 4096
+          && data.timestamp is timestamp;
+    }
+
     // 4. Matches routes
     match /patients/{patientId} {
       allow get: if isOwner(existing().ownerId) && isValidId(patientId);
@@ -193,6 +215,16 @@ service cloud.firestore {
       allow create: if isValidId(journalId) && isValidMoodJournal(incoming());
       allow update: if isValidId(journalId) && (isOwner(existing().ownerId) || (incoming().patientRut == existing().patientRut)) && incoming().ownerId == existing().ownerId && incoming().createdAt == existing().createdAt && isValidMoodJournal(incoming());
       allow delete: if isOwner(existing().ownerId) && isValidId(journalId);
+    }
+
+    match /clinical_audits/{auditId} {
+      allow get: if isOwner(existing().ownerId) && isValidId(auditId);
+      allow list: if isSignedIn() && isOwner(resource.data.ownerId);
+      allow create: if isOwner(incoming().ownerId) && isValidClinicalAudit(incoming()) && isValidId(auditId);
+    }
+
+    match /audit_logs/{logId} {
+      allow create: if isSignedIn() && isValidAuditLog(incoming()) && isValidId(logId);
     }
   }
 }
