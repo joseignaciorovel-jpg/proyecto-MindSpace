@@ -1,0 +1,147 @@
+{
+  "entities": {
+    "Patient": {
+      "title": "Patient",
+      "description": "General Patient Profile details maintained by the clinical psychologist",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier of the patient" },
+        "name": { "type": "string", "description": "Full name of the patient" },
+        "email": { "type": "string", "description": "Email address for automatic reminders" },
+        "phone": { "type": "string", "description": "Contact phone for WhatsApp reminder simulation" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp in ISO format" },
+        "ownerId": { "type": "string", "description": "User UID of the psychologist who owns this record" }
+      },
+      "required": ["name", "email", "ownerId"]
+    },
+    "Appointment": {
+      "title": "Appointment",
+      "description": "Visual agenda meetings and reservations requested by public clients or therapists",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier of the appointment" },
+        "patientId": { "type": "string", "description": "Linked patient ID if registered" },
+        "patientName": { "type": "string", "description": "Name of the booking patient" },
+        "patientEmail": { "type": "string", "description": "Email of the booking patient" },
+        "patientPhone": { "type": "string", "description": "Phone of the booking patient" },
+        "patientRut": { "type": "string", "description": "Chilean RUT of the booking patient" },
+        "consentLawAccepted": { "type": "boolean", "description": "Status of the consent of standard Chilean Laws" },
+        "date": { "type": "string", "description": "ISO date YYYY-MM-DD" },
+        "timeSlot": { "type": "string", "description": "Hour range of the slot (e.g. 09:00 - 10:00)" },
+        "status": { "type": "string", "enum": ["scheduled", "completed", "canceled"], "description": "Status of the slot" },
+        "paymentStatus": { "type": "string", "enum": ["pending", "paid"], "description": "Billing state of the consult" },
+        "price": { "type": "number", "description": "Price charged for this consultation" },
+        "notes": { "type": "string", "description": "Anamnesis short reasons of consulting" },
+        "videoRoomId": { "type": "string", "description": "Unique room key for the encrypted videocall" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Time the slot was booked" },
+        "ownerId": { "type": "string", "description": "Therapist user ID owning the agenda" },
+        "evolutionState": { "type": "string", "enum": ["draft", "signed"], "description": "Whether the evolution clinical notes has been signed/completed or temporarily saved as draft" }
+      },
+      "required": ["patientName", "patientEmail", "date", "timeSlot", "status", "paymentStatus", "ownerId"]
+    },
+    "History": {
+      "title": "ClinicalHistory",
+      "description": "Confidential clinical evolution records containing therapy progress notes",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique record identifier" },
+        "patientId": { "type": "string", "description": "Affiliated patient ID" },
+        "date": { "type": "string", "description": "Session date YYYY-MM-DD" },
+        "notes": { "type": "string", "description": "Subjective progress notes written by doctor" },
+        "observations": { "type": "string", "description": "Objective observations or diagnosis directions" },
+        "aiSummary": { "type": "string", "description": "AI summarized medical outcome of the session" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Record creation timestamp" },
+        "ownerId": { "type": "string", "description": "Therapist UID holding clinical secrecy" },
+        "isSigned": { "type": "boolean", "description": "Whether document is digitally signed" },
+        "signatureDate": { "type": "string", "description": "Date signature was authorized" },
+        "signatureName": { "type": "string", "description": "Name of therapist who signed" },
+        "signatureDoc": { "type": "string", "description": "SIS registration details of psychologist" },
+        "testFormResults": { "type": "array", "description": "Standardized test results completed during session" }
+      },
+      "required": ["patientId", "notes", "ownerId"]
+    },
+    "Settings": {
+      "title": "Settings",
+      "description": "Psychologist details, pricing configurations, and automatic reminder switches",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "The UID of the owning psychologist" },
+        "therapistName": { "type": "string", "description": "Professional name displayed publicly" },
+        "contactEmail": { "type": "string", "description": "Billing contact email" },
+        "contactPhone": { "type": "string", "description": "Sender phone displayed on reminders" },
+        "sessionPrice": { "type": "number", "description": "Invoicing fee for a standard hour" },
+        "whatsappReminders": { "type": "boolean", "description": "Toggle automatic WhatsApp messages" },
+        "emailReminders": { "type": "boolean", "description": "Toggle automatic email updates" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Last update stamp" },
+        "ownerId": { "type": "string", "description": "Therapist UID owner" },
+        "therapistTitle": { "type": "string", "description": "Extended title descriptor for clinician" },
+        "sisNumber": { "type": "string", "description": "Superintendencia de Salud registration number" },
+        "experienceYears": { "type": "string", "description": "Years of experience text label" },
+        "bioQuote": { "type": "string", "description": "Introductory citation for clinician bio" }
+      },
+      "required": ["therapistName", "ownerId"]
+    },
+    "Review": {
+      "title": "Review",
+      "description": "Patient satisfaction evaluations and public reviews with proper consent under Chilean laws",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique evaluation ID" },
+        "patientName": { "type": "string", "description": "Display name of patient, or anonymized if requested" },
+        "rating": { "type": "number", "description": "Satisfaction score (1-5)" },
+        "comment": { "type": "string", "description": "Review comment (up to 300 characters)" },
+        "consentLawAccepted": { "type": "boolean", "description": "Consent for Chilean Law 19.628 & 20.584 on data protection" },
+        "publicConsent": { "type": "boolean", "description": "Consent for displaying publicly to transparent and improve service" },
+        "isAnonymized": { "type": "boolean", "description": "If true, patient wishes to remain anonymous or use initials" },
+        "ownerId": { "type": "string", "description": "Therapist UID whom this review is for" },
+        "tags": { "type": "array", "description": "Tag list representing chosen feedback themes or categories" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Time review was submitted" }
+      },
+      "required": ["patientName", "rating", "comment", "consentLawAccepted", "publicConsent", "isAnonymized", "ownerId"]
+    },
+    "MoodJournal": {
+      "title": "MoodJournal",
+      "description": "Confidential cognitive-behavioral therapy (CBT) mood and sleep daily trackers recorded by patients",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier of the mood log" },
+        "patientRut": { "type": "string", "description": "Locked patient RUT identification for privacy-by-design lookup" },
+        "patientEmail": { "type": "string", "description": "Email identifier of the tracking patient" },
+        "patientName": { "type": "string", "description": "Display name of patient" },
+        "mood": { "type": "number", "description": "Mood rating from 1 to 5" },
+        "sleepScore": { "type": "number", "description": "Sleep quality rating from 1 to 5 stars" },
+        "sleepHours": { "type": "number", "description": "Hours of sleep recorded" },
+        "cognitiveNote": { "type": "string", "description": "Reflexive thoughts or sleep diary remarks" },
+        "ownerId": { "type": "string", "description": "The psychologist therapist owner ID for therapeutic oversight" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp of register" }
+      },
+      "required": ["patientRut", "patientEmail", "mood", "sleepScore", "sleepHours", "ownerId"]
+    }
+  },
+  "firestore": {
+    "/patients/{patientId}": {
+      "schema": "Patient",
+      "description": "Patient profiles and details"
+    },
+    "/appointments/{appointmentId}": {
+      "schema": "Appointment",
+      "description": "Agenda booking slots and reservations"
+    },
+    "/histories/{historyId}": {
+      "schema": "History",
+      "description": "Confidential therapy records"
+    },
+    "/settings/{settingsId}": {
+      "schema": "Settings",
+      "description": "Clinician settings and channels integration"
+    },
+    "/reviews/{reviewId}": {
+      "schema": "Review",
+      "description": "Patient satisfaction evaluations and feedback reviews"
+    },
+    "/mood_journals/{journalId}": {
+      "schema": "MoodJournal",
+      "description": "CBT mood and sleep daily tracks recorded securely by patients"
+    }
+  }
+}

@@ -1,0 +1,61 @@
+@import "tailwindcss";
+
+@variant dark (&:where(.dark, .dark *));
+
+@theme {
+  /* Brand colors: Palliative-inspired soothing turquoise/teal and comforting lila/violet/plum */
+  --color-palliative-teal: #0ea5e9; /* soothing turquoise blue */
+  --color-palliative-mint: #14b8a6; /* clinical mint turquoise */
+  --color-palliative-lila: #a855f7; /* lavender/lilac */
+  --color-palliative-plum: #581c87; /* calming deep violet */
+  
+  --font-sans: "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+}
+
+@layer utilities {
+  /* Dynamic Pulsing Border Glow */
+  .animate-pulse-glow {
+    animation: pulse-glow 2.5s infinite;
+  }
+
+  /* Orange component to deep clinical blue typography gradient */
+  .text-gradient-orange-blue {
+    background: linear-gradient(135deg, #f97316 0%, #2563eb 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  /* Peaceful lavender lilac-to-turquoise graphic card gradient */
+  .bg-gradient-palliative {
+    background: linear-gradient(135deg, #a855f7 0%, #14b8a6 100%);
+  }
+
+  /* Dark mode equivalent high-end therapeutic gradient */
+  .bg-gradient-palliative-dark {
+    background: linear-gradient(135deg, #3b0764 0%, #042f2e 100%);
+  }
+}
+
+@keyframes pulse-glow {
+  0% {
+    box-shadow: 0 0 0 0 rgba(20, 184, 166, 0.4);
+    border-color: rgba(20, 184, 166, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(20, 184, 166, 0);
+    border-color: rgba(20, 184, 166, 0.3);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(20, 184, 166, 0);
+    border-color: rgba(20, 184, 166, 0.5);
+  }
+}
+
+/* Base transitions for dark/light mode switches */
+* {
+  transition-property: background-color, border-color, color, fill, stroke;
+  transition-duration: 250ms;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+

@@ -1,0 +1,11 @@
+{
+  "name": "Gestor Clínico y Agenda de Psicología",
+  "description": "Plataforma clínica para profesionales de la salud mental con agenda visual interactiva, calendario público para reservas, gestión segura de historias clínicas, asistencia de IA para resúmenes de sesión, simulación de pasarela de pagos y módulo interactivo de videollamadas cifradas.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

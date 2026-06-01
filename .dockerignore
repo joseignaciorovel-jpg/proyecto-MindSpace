@@ -1,0 +1,12 @@
+node_modules
+dist
+.env
+.env.local
+.git
+.gitignore
+.github
+Dockerfile
+.dockerignore
+firebase-applet-config.json
+/build
+npm-debug.log
