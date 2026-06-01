@@ -931,7 +931,7 @@ export default function App() {
       </main>
 
       {/* Floating Abby Assistant discrete Alexa capsule trigger for Doctors */}
-      {portalMode === "dashboard" && (
+      {portalMode === "dashboard" && user && (
         <AbbyAssistant
           mode="doctor_floating"
           therapistUid={therapistUid}
