@@ -7,6 +7,5 @@ dist
 .github
 Dockerfile
 .dockerignore
-firebase-applet-config.json
 /build
 npm-debug.log
