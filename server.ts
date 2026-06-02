@@ -758,7 +758,13 @@ app.post("/api/gemini/abby", async (req, res) => {
 
   if (!hasRealKey) {
     const fallbackResponse = getAbbyLocalFallback(userQuery, appointmentsText, therapistName);
-    return res.json(fallbackResponse);
+    return res.json({
+      ...fallbackResponse,
+      diagnostics: {
+        status: "fallback_no_apiKey",
+        message: "No Gemini API Key was detected in process.env.GEMINI_API_KEY. Using smart local fallback on the backend."
+      }
+    });
   }
 
   try {
@@ -799,11 +805,26 @@ No uses markdown rodeando el JSON ni bloques de código que lo impidan parsear, 
     });
 
     const parsed = JSON.parse(response.text || "{}");
-    res.json(parsed);
+    res.json({
+      ...parsed,
+      diagnostics: {
+        status: "success",
+        message: "Gemini API generated content successfully."
+      }
+    });
   } catch (error: any) {
     console.error("Abby AI assistant backend error, running smart local fallback:", error);
     const fallbackResponse = getAbbyLocalFallback(userQuery, appointmentsText, therapistName);
-    res.json(fallbackResponse);
+    res.json({
+      ...fallbackResponse,
+      diagnostics: {
+        status: "api_exception",
+        message: error.message || String(error),
+        stack: error.stack,
+        apiKeyLength: apiKey ? apiKey.length : 0,
+        hint: "Por favor verifique que su GEMINI_API_KEY en Secret Manager esté activa, tenga saldo de facturación o no posea restricciones de acceso."
+      }
+    });
   }
 });
 

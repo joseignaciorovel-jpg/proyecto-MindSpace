@@ -431,6 +431,17 @@ export default function AbbyAssistant({ mode, therapistUid, therapistName, setti
 
       const data = await response.json();
       
+      if (data.diagnostics) {
+        if (data.diagnostics.status === "api_exception") {
+          console.error("❌ [Abby Assistant System Exception]:", data.diagnostics.message);
+          console.error("Stack trace:", data.diagnostics.stack);
+          console.error("API Key Length:", data.diagnostics.apiKeyLength);
+          console.error("Developer Hint:", data.diagnostics.hint);
+        } else {
+          console.log("🔍 [Abby Assistant Diagnostics Status]:", data.diagnostics.status, data.diagnostics.message);
+        }
+      }
+      
       setChatLog((prev) => [...prev, { sender: "abby", text: data.reply, timestamp: new Date() }]);
       speak(data.reply);
 
