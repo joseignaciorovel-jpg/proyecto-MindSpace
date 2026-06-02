@@ -235,11 +235,6 @@ export default function BookingCalendar({
 
   const handleProcessBookingAndPayment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!cardNumber || !cardExpiry || !cardCVV) {
-      setPaymentError("Por favor, ingrese los campos de facturación de prueba.");
-      return;
-    }
-
     setLoading(true);
     setPaymentError("");
 
@@ -270,49 +265,37 @@ export default function BookingCalendar({
       try {
         await setDoc(apptDocRef, newAppointment);
       } catch (err) {
-        handleFirestoreError(err, OperationType.CREATE, `appointments/${apptId}`);
+        console.warn("[Firestore Write] Direct client write warning, attempting backend fallback: ", err);
       }
 
-      // 2. Perform payments visual checkout through backend endpoint (Stripe Simulator)
-      const payRes = await fetch("/api/simulate-payment", {
+      // 2. Perform payments initiation securely through Flow
+      const payRes = await fetch("/api/flow/create-payment", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           appointmentId: apptId,
           price: sessionPrice,
           patientEmail: email,
-          testCardNumber: cardNumber
+          patientName: name,
+          patientRut: rut
         })
       });
 
+      if (!payRes.ok) {
+        throw new Error("No se pudo establecer comunicación segura con el servidor de pagos.");
+      }
+
       const paymentResult = await payRes.json();
-      if (!payRes.ok || !paymentResult.success) {
-        throw new Error(paymentResult.error || "Simulación de pago denegada por el banco emisor.");
+      if (!paymentResult.success || !paymentResult.paymentUrl) {
+        throw new Error(paymentResult.error || "No se recibió un enlace de redirección válido desde Flow.");
       }
 
-      setReceiptUrl(paymentResult.receiptUrl);
-
-      // 3. Atomically transit state to "paid" using allowed restricted public update rule
-      try {
-        await updateDoc(apptDocRef, {
-          paymentStatus: "paid"
-        });
-      } catch (err) {
-        handleFirestoreError(err, OperationType.UPDATE, `appointments/${apptId}`);
-      }
-
-      // Successful state updates
-      const updatedAppt: Appointment = { ...newAppointment, paymentStatus: "paid" };
-      setCreatedAppt(updatedAppt);
-      setStep("success");
-
-      // 4. Auto-generate beautiful preview reminder through Gemini
-      await fetchAiReminderDraft(updatedAppt, "whatsapp");
+      // 3. Perfect redirection to Flow gateway
+      window.location.href = paymentResult.paymentUrl;
 
     } catch (err: any) {
-      console.error(err);
-      setPaymentError(err.message || "La simulación de cargo falló. Revise los datos.");
-    } finally {
+      console.error("[Flow Payment Creation Error]:", err);
+      setPaymentError(err.message || "La inicialización del pago con Flow falló. Intente de nuevo.");
       setLoading(false);
     }
   };
@@ -593,86 +576,70 @@ export default function BookingCalendar({
 
         {step === "payment" && (
           <form onSubmit={handleProcessBookingAndPayment} className="space-y-6 max-w-lg mx-auto">
-            <div className="border border-yellow-200 bg-yellow-50/50 p-4 rounded-xl flex items-start gap-2 text-xs text-yellow-800">
-              <AlertTriangle className="w-5 h-5 text-yellow-600 mt-0.5 flex-shrink-0" />
+            <div className="border border-sky-200 bg-sky-50/50 p-4 rounded-xl flex items-start gap-2.5 text-xs text-sky-800">
+              <ShieldCheck className="w-5 h-5 text-sky-600 mt-0.5 flex-shrink-0" />
               <div>
-                <strong>Modo Integración / Demostración:</strong> Para pruebas de facturación, puede ingresar cualquier número simulado (ej: <strong>4000 1234 5678 9010</strong>) con cualquier fecha futura y código de seguridad. No se debitará dinero real de su cuenta.
+                <strong>Pasarela Homologada (Flow Chile):</strong> Su orden será procesada de forma segura mediante Webpay Plus. Al autorizar su pago, el portal clínico emitirá automáticamente su <strong>Boleta de Honorarios Electrónica (BHE)</strong> aprobada ante el SII para su reembolso en Isapre/Fonasa.
               </div>
             </div>
 
-            <div className="bg-slate-900 rounded-2xl p-6 text-white space-y-4">
+            <div className="bg-slate-900 rounded-2xl p-6 text-white space-y-4 shadow-xl border border-slate-800">
               <div className="flex justify-between items-center text-sm text-slate-300">
-                <span>Orden de Consulta</span>
-                <Clock className="w-4 h-4" />
+                <span className="font-semibold uppercase tracking-wider text-[10px] text-slate-400">Detalles de la Reserva</span>
+                <Clock className="w-4 h-4 text-emerald-450" />
               </div>
-              <div className="text-xs font-mono font-medium text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded inline-block">
-                Slot: {date} @ {timeSlot}
-              </div>
-              <div className="border-t border-slate-800 my-2 pt-2 flex justify-between items-center">
-                <span className="text-sm text-slate-400">Total a Pagar</span>
-                <span className="text-xl font-bold font-sans">${sessionPrice.toLocaleString("es-CL")} CLP</span>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <label className="block text-sm font-semibold text-gray-700">Tarjeta de Crédito / Débito</label>
-              <div className="relative">
-                <CreditCard className="absolute left-3 top-3.5 w-5 h-5 text-gray-400 pointer-events-none" />
-                <input
-                  type="text"
-                  required
-                  placeholder="Número de Tarjeta (16 dígitos de prueba)"
-                  maxLength={19}
-                  value={cardNumber}
-                  onChange={(e) => setCardNumber(e.target.value.replace(/\s?/g, '').replace(/(\d{4})/g, '$1 ').trim())}
-                  className="pl-10 w-full rounded-xl border border-gray-200 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 transition-all font-mono"
-                />
+              
+              <div className="text-xs font-mono font-medium text-emerald-400 bg-emerald-500/10 px-3 py-1.5 rounded inline-block">
+                Cita: {date} @ {timeSlot}
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <input
-                  type="text"
-                  required
-                  placeholder="MM/AA (Exp)"
-                  maxLength={5}
-                  value={cardExpiry}
-                  onChange={(e) => setCardExpiry(e.target.value)}
-                  className="w-full rounded-xl border border-gray-200 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 transition-all font-mono"
-                />
-                <input
-                  type="password"
-                  required
-                  placeholder="CVV"
-                  maxLength={4}
-                  value={cardCVV}
-                  onChange={(e) => setCardCVV(e.target.value)}
-                  className="w-full rounded-xl border border-gray-200 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 transition-all font-mono"
-                />
+              <div className="space-y-2.5 pt-3 border-t border-slate-800 text-xs text-slate-300 font-sans">
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Paciente:</span>
+                  <span className="font-bold text-white">{name}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">RUT:</span>
+                  <span className="font-mono text-white">{rut}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Email:</span>
+                  <span className="text-white">{email}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Profesional:</span>
+                  <span className="font-bold text-white">{therapistName}</span>
+                </div>
+              </div>
+
+              <div className="border-t border-slate-800 pt-3 flex justify-between items-center">
+                <span className="text-sm text-slate-450">Monto del Servicio</span>
+                <span className="text-xl font-black font-sans text-emerald-400">${sessionPrice.toLocaleString("es-CL")} CLP</span>
               </div>
             </div>
 
             {paymentError && (
-              <div className="text-xs bg-rose-50 border border-rose-200 p-3 rounded-lg text-rose-700 font-semibold flex items-center gap-2">
+              <div className="text-xs bg-rose-50 border border-rose-250 p-3 rounded-lg text-rose-700 font-semibold flex items-center gap-2">
                 <AlertTriangle className="w-5 h-5 text-rose-500 shrink-0" />
                 {paymentError}
               </div>
             )}
 
-            <div className="flex justify-between items-center">
+            <div className="flex justify-between items-center pt-2">
               <button
                 type="button"
                 onClick={() => setStep("details")}
-                className="text-slate-600 hover:text-slate-900 font-medium text-sm"
+                className="text-slate-500 hover:text-slate-800 font-semibold text-xs uppercase tracking-wider transition-colors"
               >
-                Volver y corregir datos
+                ← Volver y corregir
               </button>
               <button
                 type="submit"
                 id="btn_pay"
                 disabled={loading}
-                className="bg-slate-900 text-white rounded-xl px-6 py-3 text-sm font-semibold hover:bg-slate-800 transition-all shadow-md flex items-center gap-2"
+                className="bg-emerald-650 hover:bg-emerald-700 bg-emerald-600 text-white rounded-xl px-6 py-3.5 text-xs font-extrabold uppercase tracking-wider transition-all shadow-md hover:shadow-lg disabled:opacity-50 flex items-center gap-2"
               >
-                {loading ? "Procesando pago..." : "Pagar y Agendar Turno"}
+                {loading ? "Procesando con Flow..." : "Pagar con Flow (Webpay)"}
               </button>
             </div>
           </form>
