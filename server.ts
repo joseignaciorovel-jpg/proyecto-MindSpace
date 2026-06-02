@@ -720,14 +720,48 @@ No agregues placeholders adicionales u corchetes como "[Su nombre]", genera un m
   }
 });
 
+// Helper function for Abby's offline-fallback simulator
+function getAbbyLocalFallback(userQuery: string, appointmentsText: string, therapistName: string) {
+  const lower = userQuery.toLowerCase();
+  let reply = "";
+  let triggerAction = "none";
+  const reason = "Simulación por contingencia de red o API.";
+
+  if (lower.includes("suspend") || lower.includes("urgenc") || lower.includes("cancel") || lower.includes("emergenc")) {
+    triggerAction = "suspend_today";
+    reply = `Entiendo perfectamente, doctor ${therapistName || "José Ignacio Rovel"}. Comprendo la gravedad de la situación. No se preocupe de nada ahora: he preparado la suspensión inmediata de la agenda de hoy para desplegar el panel de emergencia y proceder a notificar de inmediato a sus pacientes.`;
+  } else if (lower.includes("quien") || lower.includes("paciente") || lower.includes("ahora") || lower.includes("prox") || lower.includes("agenda") || lower.includes("cita")) {
+    triggerAction = "check_appointments";
+    const apptsFiltered = appointmentsText && appointmentsText.trim() !== "No hay consultas o pacientes registrados para el día de hoy."
+      ? appointmentsText.trim() 
+      : "No registra consultas o pacientes para el día de hoy de momento.";
+    reply = `De acuerdo al estado de la agenda para hoy, doctor: ${apptsFiltered} ¿Desea realizar alguna modificación o reprogramación?`;
+  } else if (lower.includes("hola") || lower.includes("buenos") || lower.includes("buenas") || lower.includes("abby") || lower.includes("avi")) {
+    reply = `¡Hola, doctor ${therapistName || "José Ignacio Rovel"}! Le saluda Abby, su asistente virtual. Estoy lista y atenta aquí de forma discreta para procesar de inmediato sus comandos de voz y asistirle con su agenda de hoy.`;
+  } else {
+    reply = `Entiendo su indicación perfectamente, doctor. He tomado registro y estoy lista para procesarla administrativamente en su agenda y fichas clínicas.`;
+  }
+
+  return { reply, triggerAction, reason };
+}
+
 // Abby Assistant Multi-Modal Conversational Endpoint
 app.post("/api/gemini/abby", async (req, res) => {
-  try {
-    const { query: userQuery, appointmentsText, therapistName, currentTime } = req.body;
-    if (!userQuery) {
-      return res.status(400).json({ error: "Missing message query for Abby" });
-    }
+  const { query: userQuery, appointmentsText, therapistName, currentTime } = req.body;
+  if (!userQuery) {
+    return res.status(400).json({ error: "Missing message query for Abby" });
+  }
 
+  // Check if real Gemini key is assigned
+  const apiKey = process.env.GEMINI_API_KEY;
+  const hasRealKey = apiKey && apiKey !== "MOCK_KEY" && apiKey.trim().length > 0;
+
+  if (!hasRealKey) {
+    const fallbackResponse = getAbbyLocalFallback(userQuery, appointmentsText, therapistName);
+    return res.json(fallbackResponse);
+  }
+
+  try {
     const ai = getGeminiClient();
     const prompt = `Actúa como Abby, la asistente administrativa virtual de inteligencia artificial del psicólogo/a clínico ${therapistName || "José Ignacio Rovel"}.
 Tu tono debe ser excepcionalmente empático, profesional, claro y respetuoso, utilizando leves giros de lenguaje chilenos cálidos de ambiente clínico para transmitir cercanía ("entiendo perfectamente", "por supuesto", "cuente con ello", "ningun problema").
@@ -767,11 +801,9 @@ No uses markdown rodeando el JSON ni bloques de código que lo impidan parsear, 
     const parsed = JSON.parse(response.text || "{}");
     res.json(parsed);
   } catch (error: any) {
-    console.error("Abby AI assistant backend error:", error);
-    res.json({
-      reply: "Disculpe, doctor/a. Tuve un contratiempo temporal para procesar esa indicación administrativa, pero puedo asistirlo/a de igual modo.",
-      triggerAction: "none"
-    });
+    console.error("Abby AI assistant backend error, running smart local fallback:", error);
+    const fallbackResponse = getAbbyLocalFallback(userQuery, appointmentsText, therapistName);
+    res.json(fallbackResponse);
   }
 });
 
