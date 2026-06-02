@@ -578,11 +578,11 @@ export default function AbbyAssistant({ mode, therapistUid, therapistName, setti
 
               {/* Slide Drawer body container */}
               <motion.div
-                initial={{ x: "100%" }}
-                animate={{ x: 0 }}
-                exit={{ x: "100%" }}
-                transition={{ type: "spring", stiffness: 260, damping: 28 }}
-                className="fixed right-0 top-0 h-screen w-80 md:w-96 bg-white dark:bg-slate-900 border-l border-slate-100 dark:border-slate-800 shadow-2xl z-[51] flex flex-col justify-between font-sans pointer-events-auto"
+                initial={{ opacity: 0, scale: 0.95, y: 30 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 30 }}
+                transition={{ type: "spring", stiffness: 300, damping: 26 }}
+                className="fixed right-4 md:right-6 bottom-24 h-[550px] max-h-[80vh] w-80 md:w-96 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl z-[51] flex flex-col justify-between font-sans pointer-events-auto overflow-hidden"
               >
                 {/* Header section with pulsating orange ring */}
                 <div className="bg-slate-900 dark:bg-slate-950 text-white p-4 flex justify-between items-center border-b border-slate-800 relative overflow-hidden">
