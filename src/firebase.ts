@@ -3,15 +3,16 @@ import { getAuth, GoogleAuthProvider } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
 // Safe fallback Firebase configuration (prevents build failures when JSON config isn't under git)
+const metaEnv = (import.meta as any).env || {};
 const firebaseConfig = {
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "sara-35270",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:597030236952:web:318b62730ecf6713c6246d",
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyDzy-Bq0RhiH6dif0tQWpvPCsJ-3FE-wgs",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "sara-35270.firebaseapp.com",
-  firestoreDatabaseId: import.meta.env.VITE_FIREBASE_DATABASE_ID || "ai-studio-3d451c93-9738-452c-87b2-4b4817e76096",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "sara-35270.firebasestorage.app",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "597030236952",
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || ""
+  projectId: metaEnv.VITE_FIREBASE_PROJECT_ID || "sara-35270",
+  appId: metaEnv.VITE_FIREBASE_APP_ID || "1:597030236952:web:318b62730ecf6713c6246d",
+  apiKey: metaEnv.VITE_FIREBASE_API_KEY || "AIzaSyDzy-Bq0RhiH6dif0tQWpvPCsJ-3FE-wgs",
+  authDomain: metaEnv.VITE_FIREBASE_AUTH_DOMAIN || "sara-35270.firebaseapp.com",
+  firestoreDatabaseId: metaEnv.VITE_FIREBASE_DATABASE_ID || "ai-studio-3d451c93-9738-452c-87b2-4b4817e76096",
+  storageBucket: metaEnv.VITE_FIREBASE_STORAGE_BUCKET || "sara-35270.firebasestorage.app",
+  messagingSenderId: metaEnv.VITE_FIREBASE_MESSAGING_SENDER_ID || "597030236952",
+  measurementId: metaEnv.VITE_FIREBASE_MEASUREMENT_ID || ""
 };
 
 // Initialize Firebase App instance

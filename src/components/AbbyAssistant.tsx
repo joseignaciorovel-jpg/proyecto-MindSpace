@@ -144,6 +144,12 @@ export default function AbbyAssistant({ mode, therapistUid, therapistName, setti
   const [isWidgetOpen, setIsWidgetOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
+  const [apiErrorDetails, setApiErrorDetails] = useState<{
+    status: string;
+    message: string;
+    apiKeyLength?: number;
+    hint?: string;
+  } | null>(null);
 
   // Load today's appointments if in therapist mode
   useEffect(() => {
@@ -437,9 +443,18 @@ export default function AbbyAssistant({ mode, therapistUid, therapistName, setti
           console.error("Stack trace:", data.diagnostics.stack);
           console.error("API Key Length:", data.diagnostics.apiKeyLength);
           console.error("Developer Hint:", data.diagnostics.hint);
+          setApiErrorDetails({
+            status: data.diagnostics.status,
+            message: data.diagnostics.message,
+            apiKeyLength: data.diagnostics.apiKeyLength,
+            hint: data.diagnostics.hint
+          });
         } else {
           console.log("🔍 [Abby Assistant Diagnostics Status]:", data.diagnostics.status, data.diagnostics.message);
+          setApiErrorDetails(null);
         }
+      } else {
+        setApiErrorDetails(null);
       }
       
       setChatLog((prev) => [...prev, { sender: "abby", text: data.reply, timestamp: new Date() }]);
@@ -619,6 +634,29 @@ export default function AbbyAssistant({ mode, therapistUid, therapistName, setti
 
                 {/* Conversation log list */}
                 <div className="flex-1 p-4 overflow-y-auto space-y-4 bg-slate-50/50 dark:bg-slate-950/20 mr-0.5" ref={scrollRef}>
+                  {apiErrorDetails && (
+                    <div className="bg-amber-50/90 border border-amber-305 dark:bg-amber-950/20 dark:border-amber-900/50 p-3.5 rounded-2xl mb-4 text-[10.5px] text-amber-900 dark:text-amber-400 text-left space-y-1.5 leading-relaxed shadow-sm">
+                      <div className="flex items-center gap-2 font-extrabold uppercase tracking-wide text-[9px]">
+                        <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                        <span>Reserva de Créditos Agotada</span>
+                      </div>
+                      <p>
+                        Su <strong>GEMINI_API_KEY</strong> de Google está autenticada, pero su proyecto presenta balance agotado (<em>Prepayment credits depleted</em>).
+                      </p>
+                      <p className="font-semibold text-emerald-750 dark:text-emerald-400">
+                        ⚡ Abby activo en modo simulación administrativa local.
+                      </p>
+                      <a 
+                        href="https://ai.studio/projects" 
+                        target="_blank" 
+                        rel="noreferrer referer" 
+                        className="bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-[9.5px] p-2 px-3 rounded-lg inline-block mt-0.5 transition"
+                      >
+                        💳 Recargar Prepago en AI Studio
+                      </a>
+                    </div>
+                  )}
+
                   {chatLog.map((chat, idx) => (
                     <div
                       key={idx}
@@ -844,6 +882,31 @@ export default function AbbyAssistant({ mode, therapistUid, therapistName, setti
         {/* Chat Conversation Pane */}
         <div className="md:col-span-2 flex flex-col justify-between bg-slate-50/50 dark:bg-slate-950/40 p-4">
           
+          {apiErrorDetails && (
+            <div className="bg-amber-50/95 border border-amber-300 dark:bg-amber-950/20 dark:border-amber-900/50 p-4 rounded-2xl mb-4 text-xs text-amber-900 dark:text-amber-400 text-left space-y-2 leading-relaxed shadow-sm">
+              <div className="flex items-center gap-2 font-extrabold uppercase tracking-wide text-[10px]">
+                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>Aviso de Facturación: Saldo de Prepago en Cero</span>
+              </div>
+              <p className="text-[11px]">
+                El servidor ha comprobado con éxito su API Key (longitud: <strong>{apiErrorDetails.apiKeyLength}</strong> caracteres) conectada mediante Cloud Run + Secret Manager. Sin embargo, su proyecto en Google AI Studio no tiene saldo de facturación configurado o créditos de prepago activos (<em>Resource Exhausted / Credits depleted</em>).
+              </p>
+              <p className="text-[11px] font-semibold text-amber-700 dark:text-amber-300">
+                La agenda cuenta con soporte de <strong>Contingencia / Simulación Administrativa Local</strong>, por lo que Abby continuará respondiendo sus comandos por comandos lógicos de respaldo de forma inmediata.
+              </p>
+              <div className="pt-1 flex gap-2">
+                <a 
+                  href="https://ai.studio/projects" 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  className="bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-[10.5px] p-2 px-3.5 rounded-xl flex items-center gap-1 transition-all"
+                >
+                  💳 Ir a AI Studio para Recargar Créditos Prepago
+                </a>
+              </div>
+            </div>
+          )}
+
           {/* Main conversation bubble list */}
           <div className="flex-1 overflow-y-auto space-y-4 max-h-[440px] pr-2 focus-visible:outline-none" ref={scrollRef}>
             {chatLog.map((chat, idx) => (
