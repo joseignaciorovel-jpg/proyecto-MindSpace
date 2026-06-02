@@ -50,12 +50,11 @@ ${therapistName || "José Romero Velásquez"}`;
 
   // Update share link and message payload when modal opens or inputs change
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const sanitizedTherapistName = encodeURIComponent(therapistName || "Ps. José Ignacio Romero Velásquez");
-      const link = `${window.location.origin}/?mode=review&therapistId=default_psychologist_uid_123&therapistName=${sanitizedTherapistName}`;
-      setShareUrl(link);
-      setWebReservaUrl(window.location.origin);
-    }
+    const productionOrigin = "https://proyecto-mindspace-597030236952.southamerica-west1.run.app";
+    const sanitizedTherapistName = encodeURIComponent(therapistName || "Ps. José Ignacio Romero Velásquez");
+    const link = `${productionOrigin}/?mode=review&therapistId=default_psychologist_uid_123&therapistName=${sanitizedTherapistName}`;
+    setShareUrl(link);
+    setWebReservaUrl(productionOrigin);
   }, [therapistName]);
 
   // Handle active preset message syncing

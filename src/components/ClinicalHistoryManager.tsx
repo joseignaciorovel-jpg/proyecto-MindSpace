@@ -46,7 +46,8 @@ export default function ClinicalHistoryManager({ therapistUid, therapistName }: 
 
   const handleCopyReviewLink = () => {
     if (!selectedPatient) return;
-    const url = `${window.location.origin}?mode=review&patientId=${selectedPatient.id}&therapistId=${therapistUid}&therapistName=${encodeURIComponent(therapistName || "Dr. José Ignacio Rovel")}&patientName=${encodeURIComponent(selectedPatient.name)}`;
+    const productionOrigin = "https://proyecto-mindspace-597030236952.southamerica-west1.run.app";
+    const url = `${productionOrigin}?mode=review&patientId=${selectedPatient.id}&therapistId=${therapistUid}&therapistName=${encodeURIComponent(therapistName || "Dr. José Ignacio Rovel")}&patientName=${encodeURIComponent(selectedPatient.name)}`;
     navigator.clipboard.writeText(url)
       .then(() => {
         setCopiedReviewLink(true);

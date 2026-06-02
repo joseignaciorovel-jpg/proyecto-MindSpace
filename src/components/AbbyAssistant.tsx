@@ -494,8 +494,7 @@ export default function AbbyAssistant({ mode, therapistUid, therapistName, setti
   if (mode === "doctor_floating") {
     const isWorking = isListening || isSpeaking;
     return (
-      <div id="abby-discrete-alexa-trigger" className="fixed right-0 top-[35%] -translate-y-1/2 z-50 font-sans select-none pointer-events-auto">
-        
+      <>
         {/* Floating Privacy Warning banner at top of entire viewport if hands-free is left on */}
         <AnimatePresence>
           {showPrivacyNotification && (
@@ -503,7 +502,7 @@ export default function AbbyAssistant({ mode, therapistUid, therapistName, setti
               initial={{ opacity: 0, y: -40 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -40 }}
-              className="fixed top-24 right-4 z-[9999] w-76 text-left pointer-events-auto"
+              className="fixed top-24 right-4 z-[9999] w-76 text-left pointer-events-auto font-sans"
             >
               <div className="bg-slate-900 border border-amber-500/30 text-white rounded-2xl p-3 shadow-2xl flex items-start gap-2.5">
                 <div className="w-7 h-7 rounded-full bg-amber-500/20 flex items-center justify-center shrink-0">
@@ -528,37 +527,39 @@ export default function AbbyAssistant({ mode, therapistUid, therapistName, setti
         </AnimatePresence>
 
         {/* The Capsule Ring on the right sidebar edge */}
-        <div 
-          onClick={() => setIsSlideDrawerOpen(!isSlideDrawerOpen)}
-          className={`relative group w-3 hover:w-6 h-36 border shadow-2xl transition-all duration-300 flex flex-col justify-center items-center py-3 select-none cursor-pointer rounded-l-3xl ${
-            isListening 
-              ? "bg-gradient-to-b from-orange-400 via-amber-500 to-red-500 border-orange-500 animate-[pulse_1.2s_infinite] shadow-[0_0_20px_rgba(249,115,22,0.95)] scale-102"
-              : isSpeaking
-                ? "bg-gradient-to-b from-amber-400 via-orange-400 to-amber-600 border-amber-400 animate-[bounce_1s_infinite] shadow-[0_0_25px_rgba(245,158,11,1)] scale-110"
-                : "bg-slate-950 dark:bg-slate-900 border-slate-800 dark:border-slate-800 hover:border-emerald-500 shadow-[0_4px_15px_rgba(0,0,0,0.4)]"
-          }`}
-          title="Tocar (o Alt+A) para hablar con asistente virtual Abby"
-        >
-          {/* Internal glowing light thread - Stretched Ring Alexa Style */}
-          <div className={`w-1 h-28 rounded-full transition-all duration-300 ${
-            isListening
-              ? "bg-white shadow-[0_0_10px_#fff]"
-              : isSpeaking
-                ? "bg-white shadow-[0_0_12px_#fff] animate-pulse"
-                : "bg-emerald-500/80 group-hover:bg-emerald-400 shadow-[0_0_6px_#10b981]"
-          }`} />
+        <div id="abby-discrete-alexa-trigger" className="fixed right-0 top-[35%] -translate-y-1/2 z-40 font-sans select-none pointer-events-auto">
+          <div 
+            onClick={() => setIsSlideDrawerOpen(!isSlideDrawerOpen)}
+            className={`relative group w-3 hover:w-6 h-36 border shadow-2xl transition-all duration-300 flex flex-col justify-center items-center py-3 select-none cursor-pointer rounded-l-3xl ${
+              isListening 
+                ? "bg-gradient-to-b from-orange-400 via-amber-500 to-red-500 border-orange-500 animate-[pulse_1.2s_infinite] shadow-[0_0_20px_rgba(249,115,22,0.95)] scale-102"
+                : isSpeaking
+                  ? "bg-gradient-to-b from-amber-400 via-orange-400 to-amber-600 border-amber-400 animate-[bounce_1s_infinite] shadow-[0_0_25px_rgba(245,158,11,1)] scale-110"
+                  : "bg-slate-950 dark:bg-slate-900 border-slate-800 dark:border-slate-800 hover:border-emerald-500 shadow-[0_4px_15px_rgba(0,0,0,0.4)]"
+            }`}
+            title="Tocar (o Alt+A) para hablar con asistente virtual Abby"
+          >
+            {/* Internal glowing light thread - Stretched Ring Alexa Style */}
+            <div className={`w-1 h-28 rounded-full transition-all duration-300 ${
+              isListening
+                ? "bg-white shadow-[0_0_10px_#fff]"
+                : isSpeaking
+                  ? "bg-white shadow-[0_0_12px_#fff] animate-pulse"
+                  : "bg-emerald-500/80 group-hover:bg-emerald-400 shadow-[0_0_6px_#10b981]"
+            }`} />
 
-          {/* Stretched ring visual flare overlay pop */}
-          {isWorking && (
-            <span className="absolute -left-1 flex h-3 w-3">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
-            </span>
-          )}
+            {/* Stretched ring visual flare overlay pop */}
+            {isWorking && (
+              <span className="absolute -left-1 flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
+              </span>
+            )}
 
-          {/* Hover indicator tag */}
-          <div className="absolute right-7 bg-slate-900 text-white text-[10px] font-bold p-1 px-2.5 rounded-lg border border-slate-800 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap shadow-md uppercase tracking-wider">
-            {isListening ? "● Escuchando" : isSpeaking ? "🔊 Hablando" : "Abby Voz (Alt+A)"}
+            {/* Hover indicator tag */}
+            <div className="absolute right-7 bg-slate-900 text-white text-[10px] font-bold p-1 px-2.5 rounded-lg border border-slate-800 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap shadow-md uppercase tracking-wider">
+              {isListening ? "● Escuchando" : isSpeaking ? "🔊 Hablando" : "Abby Voz (Alt+A)"}
+            </div>
           </div>
         </div>
 
@@ -572,7 +573,7 @@ export default function AbbyAssistant({ mode, therapistUid, therapistName, setti
                 animate={{ opacity: 0.3 }}
                 exit={{ opacity: 0 }}
                 onClick={() => setIsSlideDrawerOpen(false)}
-                className="fixed inset-0 bg-slate-950/40 backdrop-blur-xs z-40"
+                className="fixed inset-0 bg-slate-950/40 backdrop-blur-xs z-50 pointer-events-auto"
               />
 
               {/* Slide Drawer body container */}
@@ -581,7 +582,7 @@ export default function AbbyAssistant({ mode, therapistUid, therapistName, setti
                 animate={{ x: 0 }}
                 exit={{ x: "100%" }}
                 transition={{ type: "spring", stiffness: 260, damping: 28 }}
-                className="fixed right-0 top-0 h-screen w-80 md:w-96 bg-white dark:bg-slate-900 border-l border-slate-100 dark:border-slate-800 shadow-2xl z-50 flex flex-col justify-between"
+                className="fixed right-0 top-0 h-screen w-80 md:w-96 bg-white dark:bg-slate-900 border-l border-slate-100 dark:border-slate-800 shadow-2xl z-[51] flex flex-col justify-between font-sans pointer-events-auto"
               >
                 {/* Header section with pulsating orange ring */}
                 <div className="bg-slate-900 dark:bg-slate-950 text-white p-4 flex justify-between items-center border-b border-slate-800 relative overflow-hidden">
@@ -796,7 +797,7 @@ export default function AbbyAssistant({ mode, therapistUid, therapistName, setti
           )}
         </AnimatePresence>
 
-      </div>
+      </>
     );
   }
 
