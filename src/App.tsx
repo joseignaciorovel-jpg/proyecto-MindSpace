@@ -13,7 +13,10 @@ import ClinicianSettings from "./components/ClinicianSettings";
 import AbbyAssistant from "./components/AbbyAssistant";
 import PatientPortal from "./components/PatientPortal";
 import ShareReputationModal from "./components/ShareReputationModal";
-import { Calendar, BookOpen, CreditCard, LogIn, LogOut, Video, Heart, Globe, Settings, Lock, Sparkles, MessageSquare, ShieldCheck, Clipboard, Star, Share2, ChevronLeft, ChevronRight, Sun, Moon, Phone, Smile, ShieldAlert, Activity, Clock, ChevronDown } from "lucide-react";
+import FluidBackground from "./components/FluidBackground";
+import { soundFX } from "./utils/soundFX";
+import { motion, AnimatePresence } from "motion/react";
+import { Calendar, BookOpen, CreditCard, LogIn, LogOut, Video, Heart, Globe, Settings, Lock, Sparkles, MessageSquare, ShieldCheck, Clipboard, Star, Share2, ChevronLeft, ChevronRight, Sun, Moon, Phone, Smile, ShieldAlert, Activity, Clock, ChevronDown, Volume2, VolumeX } from "lucide-react";
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -27,6 +30,8 @@ export default function App() {
     if (saved) return saved === "dark";
     return window.matchMedia("(prefers-color-scheme: dark)").matches;
   });
+
+  const [soundMuted, setSoundMuted] = useState<boolean>(() => soundFX.isMuted());
 
   useEffect(() => {
     if (darkMode) {
@@ -225,15 +230,21 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#FBFBFC] dark:bg-slate-950 text-[#1D1D1F] dark:text-slate-100 antialiased selection:bg-slate-200 dark:selection:bg-slate-800 flex flex-col justify-between font-sans transition-colors duration-300">
-      
-      {/* Top Professional Header Navigation */}
-      <header className={`bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800 shadow-xs sticky top-0 z-40 transition-colors duration-300 animate-in fade-in slide-in-from-top-6 duration-700 ${portalMode === "patient" ? "hidden md:block" : ""}`}>
+    <div className="min-h-screen bg-[#FBFBFC]/75 dark:bg-slate-950/75 text-[#1D1D1F] dark:text-slate-100 antialiased selection:bg-slate-200 dark:selection:bg-slate-800 flex flex-col justify-between font-sans transition-colors duration-300 relative">
+      <FluidBackground darkMode={darkMode} />
+         {/* Top Professional Header Navigation */}
+      <header className={`bg-white/70 dark:bg-slate-900/70 backdrop-blur-md border-b border-gray-100/50 dark:border-slate-800/50 shadow-xs sticky top-0 z-40 transition-colors duration-300 animate-in fade-in slide-in-from-top-6 duration-700 ${portalMode === "patient" ? "hidden md:block" : ""}`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col sm:flex-row justify-between items-center gap-4">
           
           {/* Practice Visual Logo */}
           <div className="flex items-center gap-2.5">
-            <div className="bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-950 p-2 rounded-xl shadow-md cursor-pointer hover:scale-105 transition-transform duration-200">
+            <div 
+              onClick={() => {
+                soundFX.playChime();
+              }}
+              onMouseEnter={() => soundFX.playTick()}
+              className="bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-950 p-2 rounded-xl shadow-md cursor-pointer hover:scale-105 transition-transform duration-200"
+            >
               <Heart className="w-5 h-5 animate-pulse text-emerald-400 dark:text-emerald-600" />
             </div>
             <div>
@@ -245,15 +256,17 @@ export default function App() {
           </div>
 
           {/* Quick Portal Switch controllers */}
-          <div className="flex items-center bg-gray-50 dark:bg-slate-950 p-1 rounded-2xl border border-gray-100 dark:border-slate-850 shadow-inner flex-wrap gap-1 sm:gap-2">
+          <div className="flex items-center bg-gray-50/70 dark:bg-slate-950/70 backdrop-blur-xs p-1 rounded-2xl border border-gray-100 dark:border-slate-850 shadow-inner flex-wrap gap-1 sm:gap-2">
             <button
               onClick={() => {
+                soundFX.playTransition();
                 setActiveCallRoomId(null);
                 setPortalMode("public");
               }}
+              onMouseEnter={() => soundFX.playTick()}
               className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1 transition-all hover:scale-102 active:scale-98 cursor-pointer ${
                 portalMode === "public"
-                  ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm border border-gray-100 dark:border-slate-800 font-extrabold"
+                  ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm border border-gray-105 dark:border-slate-800 font-extrabold"
                   : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
               }`}
             >
@@ -262,12 +275,14 @@ export default function App() {
 
             <button
               onClick={() => {
+                soundFX.playTransition();
                 setActiveCallRoomId(null);
                 setPortalMode("patient");
               }}
+              onMouseEnter={() => soundFX.playTick()}
               className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1 transition-all hover:scale-102 active:scale-98 cursor-pointer ${
                 portalMode === "patient"
-                  ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm border border-gray-100 dark:border-slate-800 font-extrabold"
+                  ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm border border-gray-105 dark:border-slate-800 font-extrabold"
                   : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
               }`}
             >
@@ -277,11 +292,13 @@ export default function App() {
             {(user || portalMode === "dashboard") && (
               <button
                 onClick={() => {
+                  soundFX.playTransition();
                   setPortalMode("dashboard");
                 }}
+                onMouseEnter={() => soundFX.playTick()}
                 className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1 transition-all hover:scale-102 active:scale-98 cursor-pointer ${
                   portalMode === "dashboard"
-                    ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm border border-gray-100 dark:border-slate-800 font-extrabold"
+                    ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm border border-gray-105 dark:border-slate-800 font-extrabold"
                     : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
                 }`}
               >
@@ -293,9 +310,35 @@ export default function App() {
           {/* User profiles info, Theme Switch, or login trigger */}
           <div className="flex items-center gap-3">
             
+            {/* Elegant Sound FX System Mute / Unmute Toggle */}
+            <button
+              onClick={() => {
+                const updatedMuteState = soundFX.toggleMute();
+                setSoundMuted(updatedMuteState);
+                if (!updatedMuteState) {
+                  soundFX.playChime();
+                }
+              }}
+              onMouseEnter={() => soundFX.playTick()}
+              type="button"
+              className="p-2 bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-100 rounded-xl transition-all cursor-pointer hover:scale-105 active:scale-95 shadow-sm inline-flex items-center justify-center border border-transparent dark:border-slate-700"
+              aria-label="Toggle sound feedback"
+              title={soundMuted ? "Activar efectos de sonido" : "Silenciar efectos de sonido"}
+            >
+              {soundMuted ? (
+                <VolumeX className="w-4 h-4 text-rose-500" />
+              ) : (
+                <Volume2 className="w-4 h-4 text-emerald-500" />
+              )}
+            </button>
+
             {/* Elegant Light / Dark Toggle button */}
             <button
-              onClick={() => setDarkMode(!darkMode)}
+              onClick={() => {
+                soundFX.playPop();
+                setDarkMode(!darkMode);
+              }}
+              onMouseEnter={() => soundFX.playTick()}
               type="button"
               className="p-2 bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-100 rounded-xl transition-all cursor-pointer hover:scale-105 active:scale-95 shadow-sm inline-flex items-center justify-center border border-transparent dark:border-slate-700"
               aria-label="Toggle theme mode"
@@ -820,53 +863,73 @@ export default function App() {
                       </div>
                       
                       {/* Interactive dashboard tab switch elements */}
-                      <div className="flex bg-slate-100 dark:bg-slate-950 rounded-2xl p-1 gap-1 border dark:border-slate-850">
+                      <div className="flex bg-slate-100/80 dark:bg-slate-950/80 backdrop-blur-xs rounded-2xl p-1 gap-1 border dark:border-slate-850 flex-wrap sm:flex-nowrap">
                         <button
-                          onClick={() => setActiveTab("agenda")}
+                          onClick={() => {
+                            soundFX.playPop();
+                            setActiveTab("agenda");
+                          }}
+                          onMouseEnter={() => soundFX.playTick()}
                           className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
                             activeTab === "agenda"
                               ? "bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm font-extrabold"
-                              : "text-gray-500 dark:text-slate-400 hover:text-slate-808 dark:hover:text-slate-200"
+                              : "text-gray-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
                           }`}
                         >
                           <Calendar className="w-3.5 h-3.5" /> Agenda Visual
                         </button>
                         <button
-                          onClick={() => setActiveTab("histories")}
+                          onClick={() => {
+                            soundFX.playPop();
+                            setActiveTab("histories");
+                          }}
+                          onMouseEnter={() => soundFX.playTick()}
                           className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
                             activeTab === "histories"
                               ? "bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm font-extrabold"
-                              : "text-gray-500 dark:text-slate-400 hover:text-slate-808 dark:hover:text-slate-201"
+                              : "text-gray-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
                           }`}
                         >
                           <BookOpen className="w-3.5 h-3.5" /> Hists. Clínicas (IA)
                         </button>
                         <button
-                          onClick={() => setActiveTab("payments")}
+                          onClick={() => {
+                            soundFX.playPop();
+                            setActiveTab("payments");
+                          }}
+                          onMouseEnter={() => soundFX.playTick()}
                           className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
                             activeTab === "payments"
                               ? "bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm font-extrabold"
-                              : "text-gray-500 dark:text-slate-400 hover:text-slate-808 dark:hover:text-slate-201"
+                              : "text-gray-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
                           }`}
                         >
                           <CreditCard className="w-3.5 h-3.5" /> Finanzas y Facturas
                         </button>
                         <button
-                          onClick={() => setActiveTab("abby")}
+                          onClick={() => {
+                            soundFX.playPop();
+                            setActiveTab("abby");
+                          }}
+                          onMouseEnter={() => soundFX.playTick()}
                           className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
                             activeTab === "abby"
                               ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 shadow-sm font-extrabold"
-                              : "text-gray-500 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400"
+                              : "text-gray-500 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-450"
                           }`}
                         >
-                          <Sparkles className="w-3.5 h-3.5 text-emerald-500 animate-pulse" /> Asistente Abby (IA)
+                          <Sparkles className="w-3.5 h-3.5 text-emerald-500" /> Asistente Abby (IA)
                         </button>
                         <button
-                          onClick={() => setActiveTab("settings")}
+                          onClick={() => {
+                            soundFX.playPop();
+                            setActiveTab("settings");
+                          }}
+                          onMouseEnter={() => soundFX.playTick()}
                           className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
                             activeTab === "settings"
                               ? "bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm font-extrabold"
-                              : "text-gray-500 dark:text-slate-400 hover:text-slate-808 dark:hover:text-slate-201"
+                              : "text-gray-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
                           }`}
                         >
                           <Settings className="w-3.5 h-3.5" /> Ajustes
@@ -874,51 +937,89 @@ export default function App() {
                       </div>
                     </div>
 
-                    {/* Rendering target Private tabs */}
-                    {activeTab === "agenda" && (
-                      <div className="animate-in fade-in duration-200">
-                        <ClinicianAgenda
-                          therapistUid={therapistUid}
-                          onJoinCall={(roomId, meta) => {
-                            setActiveCallRoomId(roomId);
-                            setActiveCallPatient(meta || null);
-                          }}
-                        />
-                      </div>
-                    )}
+                    {/* Rendering target Private tabs with rich, living animations */}
+                    <div className="relative mt-2">
+                      <AnimatePresence mode="wait">
+                        {activeTab === "agenda" && (
+                          <motion.div
+                            key="agenda"
+                            initial={{ opacity: 0, y: 15 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -15 }}
+                            transition={{ duration: 0.22, ease: "easeOut" }}
+                          >
+                            <ClinicianAgenda
+                              therapistUid={therapistUid}
+                              onJoinCall={(roomId, meta) => {
+                                soundFX.playChime();
+                                setActiveCallRoomId(roomId);
+                                setActiveCallPatient(meta || null);
+                              }}
+                            />
+                          </motion.div>
+                        )}
 
-                    {activeTab === "histories" && (
-                      <div className="animate-in fade-in duration-200">
-                        <ClinicalHistoryManager therapistUid={therapistUid} therapistName={therapistName} />
-                      </div>
-                    )}
+                        {activeTab === "histories" && (
+                          <motion.div
+                            key="histories"
+                            initial={{ opacity: 0, y: 15 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -15 }}
+                            transition={{ duration: 0.22, ease: "easeOut" }}
+                          >
+                            <ClinicalHistoryManager therapistUid={therapistUid} therapistName={therapistName} />
+                          </motion.div>
+                        )}
 
-                    {activeTab === "payments" && (
-                      <div className="animate-in fade-in duration-200">
-                        <PaymentsLedger therapistUid={therapistUid} />
-                      </div>
-                    )}
+                        {activeTab === "payments" && (
+                          <motion.div
+                            key="payments"
+                            initial={{ opacity: 0, y: 15 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -15 }}
+                            transition={{ duration: 0.22, ease: "easeOut" }}
+                          >
+                            <PaymentsLedger therapistUid={therapistUid} />
+                          </motion.div>
+                        )}
 
-                    {activeTab === "abby" && (
-                      <div className="animate-in fade-in duration-200">
-                        <AbbyAssistant
-                          mode="doctor"
-                          therapistUid={therapistUid}
-                          therapistName={therapistName}
-                          settings={settings}
-                        />
-                      </div>
-                    )}
+                        {activeTab === "abby" && (
+                          <motion.div
+                            key="abby"
+                            initial={{ opacity: 0, y: 15 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -15 }}
+                            transition={{ duration: 0.22, ease: "easeOut" }}
+                          >
+                            <AbbyAssistant
+                              mode="doctor"
+                              therapistUid={therapistUid}
+                              therapistName={therapistName}
+                              settings={settings}
+                            />
+                          </motion.div>
+                        )}
 
-                    {activeTab === "settings" && (
-                      <div className="animate-in fade-in duration-200">
-                        <ClinicianSettings
-                          therapistUid={therapistUid}
-                          currentSettings={settings}
-                          onSettingsSaved={(newSettings) => setSettings(newSettings)}
-                        />
-                      </div>
-                    )}
+                        {activeTab === "settings" && (
+                          <motion.div
+                            key="settings"
+                            initial={{ opacity: 0, y: 15 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -15 }}
+                            transition={{ duration: 0.22, ease: "easeOut" }}
+                          >
+                            <ClinicianSettings
+                              therapistUid={therapistUid}
+                              currentSettings={settings}
+                              onSettingsSaved={(newSettings) => {
+                                soundFX.playChime();
+                                setSettings(newSettings);
+                              }}
+                            />
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
 
                     </div>
                   );
@@ -949,7 +1050,7 @@ export default function App() {
       )}
 
       {/* Human-friendly high-end clinical Footer */}
-      <footer className="bg-white dark:bg-slate-900 border-t border-gray-100 dark:border-slate-800 py-10 mt-16 text-slate-500 dark:text-slate-400 text-xs font-sans transition-colors duration-300">
+      <footer className="bg-white/70 dark:bg-slate-900/70 backdrop-blur-md border-t border-gray-100/50 dark:border-slate-800/50 py-10 mt-16 text-slate-500 dark:text-slate-400 text-xs font-sans transition-colors duration-300">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 md:grid-cols-3 gap-8 text-left pb-8 border-b border-gray-100 dark:border-slate-800">
           
           {/* Column 1: Clinic & Contact Details */}
