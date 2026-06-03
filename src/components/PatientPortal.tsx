@@ -3,6 +3,8 @@ import { collection, query, where, onSnapshot, doc, setDoc, Timestamp, orderBy, 
 import { db, auth } from "../firebase";
 import { Heart, Smile, Moon, Calendar, Sparkles, CheckCircle2, TrendingUp, Plus, Activity, LogOut, ShieldAlert, Award, AlertCircle, Video, MessageSquare, Clock, ChevronDown, User } from "lucide-react";
 import BookingCalendar from "./BookingCalendar";
+import { soundFX } from "../utils/soundFX";
+import { motion, AnimatePresence } from "motion/react";
 
 // Local helper to track errors on Firestore
 enum OperationType {
@@ -891,10 +893,14 @@ export default function PatientPortal({ therapistUid, therapistName, sessionPric
           <div className="flex-1 overflow-y-auto p-4 bg-slate-50/50 dark:bg-slate-950/30 space-y-4 max-h-none md:max-h-[580px]">
             
             {/* Playstore Bottom Tab Simulators: Top buttons header to split columns into interactive viewtabs */}
-            <div className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-850 p-1 rounded-2xl flex gap-1 justify-between select-none shadow-xs mb-2">
+            <div className="bg-white/70 dark:bg-slate-900/75 backdrop-blur-md border border-slate-150 dark:border-slate-850 p-1 rounded-2xl flex gap-1 justify-between select-none shadow-xs mb-2">
               <button
                 type="button"
-                onClick={() => setActiveMobileTab("appointments")}
+                onClick={() => {
+                  soundFX.playPop();
+                  setActiveMobileTab("appointments");
+                }}
+                onMouseEnter={() => soundFX.playTick()}
                 className={`flex-1 text-[9.5px]/none font-extrabold p-2 rounded-xl transition duration-150 flex flex-col sm:flex-row items-center justify-center gap-1 cursor-pointer ${
                   activeMobileTab === "appointments"
                     ? "bg-slate-950 text-white dark:bg-white dark:text-slate-950 shadow-md font-black"
@@ -906,7 +912,11 @@ export default function PatientPortal({ therapistUid, therapistName, sessionPric
               </button>
               <button
                 type="button"
-                onClick={() => setActiveMobileTab("booking")}
+                onClick={() => {
+                  soundFX.playPop();
+                  setActiveMobileTab("booking");
+                }}
+                onMouseEnter={() => soundFX.playTick()}
                 className={`flex-1 text-[9.5px]/none font-extrabold p-2 rounded-xl transition duration-150 flex flex-col sm:flex-row items-center justify-center gap-1 cursor-pointer ${
                   activeMobileTab === "booking"
                     ? "bg-slate-950 text-white dark:bg-white dark:text-slate-950 shadow-md font-black"
@@ -918,7 +928,11 @@ export default function PatientPortal({ therapistUid, therapistName, sessionPric
               </button>
               <button
                 type="button"
-                onClick={() => setActiveMobileTab("journal")}
+                onClick={() => {
+                  soundFX.playPop();
+                  setActiveMobileTab("journal");
+                }}
+                onMouseEnter={() => soundFX.playTick()}
                 className={`flex-1 text-[9.5px]/none font-extrabold p-2 rounded-xl transition duration-150 flex flex-col sm:flex-row items-center justify-center gap-1 cursor-pointer ${
                   activeMobileTab === "journal"
                     ? "bg-slate-950 text-white dark:bg-white dark:text-slate-950 shadow-md font-black"
@@ -930,10 +944,14 @@ export default function PatientPortal({ therapistUid, therapistName, sessionPric
               </button>
               <button
                 type="button"
-                onClick={() => setActiveMobileTab("crisis")}
+                onClick={() => {
+                  soundFX.playPop();
+                  setActiveMobileTab("crisis");
+                }}
+                onMouseEnter={() => soundFX.playTick()}
                 className={`flex-1 text-[9.5px]/none font-extrabold p-2 rounded-xl transition duration-150 flex flex-col sm:flex-row items-center justify-center gap-1 cursor-pointer ${
                   activeMobileTab === "crisis"
-                    ? "bg-red-650 text-white shadow-md font-black animate-pulse animate-duration-1000"
+                    ? "bg-red-650 text-white shadow-md font-black animate-pulse"
                     : "text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20"
                 }`}
               >
@@ -943,10 +961,17 @@ export default function PatientPortal({ therapistUid, therapistName, sessionPric
             </div>
 
             {/* LEFT COLUMN: Appointments visual checklists & Video rooms */}
-            {activeMobileTab === "appointments" && (
-              <div className="space-y-4 animate-in">
-              
-              <div className="bg-white dark:bg-slate-900 border border-gray-150 dark:border-slate-850 rounded-3xl p-5 shadow-sm space-y-4 text-left">
+            <AnimatePresence mode="wait">
+              {activeMobileTab === "appointments" && (
+                <motion.div
+                  key="appointments"
+                  initial={{ opacity: 0, scale: 0.98, y: 12 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.98, y: -12 }}
+                  transition={{ duration: 0.2 }}
+                  className="space-y-4 text-left w-full"
+                >
+                  <div className="bg-white/85 dark:bg-slate-900/80 backdrop-blur-md border border-gray-150 dark:border-slate-850 rounded-3xl p-5 shadow-sm space-y-4">
                 <h3 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 dark:border-slate-850 pb-2.5 flex items-center gap-2">
                   <Calendar className="w-4 h-4 text-emerald-500" /> Mis Próximas Citas
                 </h3>
@@ -1122,13 +1147,20 @@ export default function PatientPortal({ therapistUid, therapistName, sessionPric
                   </div>
                 )}
               </div>
-            </div>
-          )}
+                </motion.div>
+              )}
 
             {/* Agendar / Reservar Tab Item */}
             {activeMobileTab === "booking" && (
-              <div className="space-y-4 animate-in">
-                <div className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-850 rounded-3xl p-4 shadow-sm space-y-3.5 text-left">
+              <motion.div
+                key="booking"
+                initial={{ opacity: 0, scale: 0.98, y: 12 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.98, y: -12 }}
+                transition={{ duration: 0.2 }}
+                className="space-y-4 text-left w-full"
+              >
+                <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border border-slate-150 dark:border-slate-850 rounded-3xl p-4 shadow-sm space-y-3.5">
                   <div className="space-y-1">
                     <span className="text-[9px] font-mono font-bold text-teal-600 dark:text-cyan-400 uppercase tracking-widest block leading-none">
                       📅 RESERVAS FLUIDAS DESDE TU DISPOSITIVO
@@ -1142,7 +1174,7 @@ export default function PatientPortal({ therapistUid, therapistName, sessionPric
                   </div>
 
                   {/* Embedded custom mobile BookingCalendar */}
-                  <div className="border border-slate-100 dark:border-slate-800 rounded-2xl overflow-hidden shadow-xs">
+                  <div className="border border-slate-100 dark:border-slate-800 rounded-2xl overflow-hidden shadow-xs bg-white/50 dark:bg-slate-950/20">
                     <BookingCalendar
                       therapistUid={therapistUid}
                       therapistName={therapistName}
@@ -1155,24 +1187,33 @@ export default function PatientPortal({ therapistUid, therapistName, sessionPric
                     />
                   </div>
                 </div>
-              </div>
+              </motion.div>
             )}
 
             {/* S.O.S Crisis tab items */}
             {activeMobileTab === "crisis" && (
-              <div className="space-y-4 animate-in">
+              <motion.div
+                key="crisis"
+                initial={{ opacity: 0, scale: 0.98, y: 12 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.98, y: -12 }}
+                transition={{ duration: 0.2 }}
+                className="space-y-4 text-left w-full"
+              >
                 {/* Emergency / Crisis Block */}
-                <div className="bg-rose-50/50 dark:bg-rose-950/20 border border-rose-250 dark:border-rose-900/40 rounded-3xl p-5 shadow-sm space-y-3 pb-4 text-left">
+                <div className="bg-rose-50/60 dark:bg-rose-950/30 backdrop-blur-md border border-rose-250 dark:border-rose-900/40 rounded-3xl p-5 shadow-sm space-y-3 pb-4">
                   <div className="flex items-center gap-2">
-                    <AlertCircle className="w-4.5 h-4.5 text-red-600 dark:text-red-450 animate-pulse" />
-                    <span className="text-[10.5px] font-extrabold uppercase text-red-700 dark:text-red-400 tracking-wider">Asistencia y Alerta de Crisis</span>
+                    <AlertCircle className="w-4.5 h-4.5 text-red-600 dark:text-red-450 animate-pulse animate-duration-1000" />
+                    <span className="text-[10.5px] font-extrabold uppercase text-red-700 dark:text-red-450 tracking-wider">Asistencia y Alerta de Crisis</span>
                   </div>
                   <p className="text-xs text-red-950 dark:text-red-300 leading-relaxed font-semibold">
                     ¿Te encuentras en un estado agudo de desorientación, angustia severa o crisis emocional? Nuestro protocolo prioritario de sobrecupo de Abby AI está activo.
                   </p>
                   <button
                     type="button"
+                    onMouseEnter={() => soundFX.playTick()}
                     onClick={() => {
+                      soundFX.playPop();
                       setCrisisStep("options");
                       setCrisisPhone("");
                       setCrisisDesc("");
@@ -1180,14 +1221,14 @@ export default function PatientPortal({ therapistUid, therapistName, sessionPric
                       setOverbookedAppt(null);
                       setShowCrisisModal(true);
                     }}
-                    className="w-full bg-red-650 hover:bg-red-700 text-white text-[10.5px] font-extrabold p-3 rounded-xl transition duration-200 cursor-pointer flex items-center justify-center gap-1.5 uppercase shadow active:scale-98"
+                    className="w-full bg-red-650 hover:bg-red-700 text-white text-[10.5px] font-extrabold p-3 rounded-xl transition duration-200 cursor-pointer flex items-center justify-center gap-1.5 uppercase shadow active:scale-98 hover:scale-101"
                   >
                     🚨 Activar Protocolo de Crisis
                   </button>
                 </div>
 
                 {/* State helpline numbers for Chile */}
-                <div className="bg-slate-100 dark:bg-slate-900 text-slate-900 dark:text-white rounded-3xl p-5 border border-slate-200 dark:border-slate-800 text-left space-y-3.5 shadow-sm">
+                <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-md text-slate-900 dark:text-white rounded-3xl p-5 border border-slate-200 dark:border-slate-800 space-y-3.5 shadow-sm">
                   <span className="text-[9.5px] font-mono font-bold text-teal-600 dark:text-teal-400 uppercase tracking-widest block leading-none">
                     📞 Apoyo de Contención Estatal Chile
                   </span>
@@ -1195,30 +1236,51 @@ export default function PatientPortal({ therapistUid, therapistName, sessionPric
                     Si te encuentras en una crisis severa que no logras contener solo o con riesgo inminente, recuerda marcar a estos números de auxilio gratuitos estatales 24/7 de forma confidencial:
                   </p>
                   <div className="space-y-2 text-[10.5px]">
-                    <div className="p-3 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-850 rounded-2xl flex justify-between items-center text-left">
+                    <div className="p-3 bg-slate-55/60 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-850 rounded-2xl flex justify-between items-center text-left">
                       <div>
                         <span className="font-extrabold text-teal-600 dark:text-teal-300 block">Salud Responde🇨🇱</span>
                         <span className="text-[8.5px] text-slate-500 dark:text-zinc-400">Canal de Contención Min. de Salud</span>
                       </div>
-                      <a href="tel:6003607777" className="bg-teal-600 hover:bg-teal-700 text-white font-extrabold px-3 py-1.5 rounded-xl text-[10px]">Llamar 6003607777</a>
+                      <a 
+                        href="tel:6003607777" 
+                        onMouseEnter={() => soundFX.playTick()}
+                        onClick={() => soundFX.playPop()}
+                        className="bg-teal-600 hover:bg-teal-700 text-white font-extrabold px-3 py-1.5 rounded-xl text-[10px]"
+                      >
+                        Llamar 6003607777
+                      </a>
                     </div>
-                    <div className="p-3 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-850 rounded-2xl flex justify-between items-center text-left">
+                    <div className="p-3 bg-slate-55/60 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-850 rounded-2xl flex justify-between items-center text-left">
                       <div>
                         <span className="font-extrabold text-[#dc2626] dark:text-[#f87171] block">S.O.S Prevención Suicidio</span>
                         <span className="text-[8.5px] text-slate-500 dark:text-zinc-400">Línea Telefónica Nacional Gratuita</span>
                       </div>
-                      <a href="tel:*4141" className="bg-red-655 hover:bg-red-700 text-white font-extrabold px-3 py-1.5 rounded-xl text-[10px]">Llamar *4141</a>
+                      <a 
+                        href="tel:*4141" 
+                        onMouseEnter={() => soundFX.playTick()}
+                        onClick={() => soundFX.playPop()}
+                        className="bg-red-655 hover:bg-red-700 text-white font-extrabold px-3 py-1.5 rounded-xl text-[10px]"
+                      >
+                        Llamar *4141
+                      </a>
                     </div>
                   </div>
                 </div>
-              </div>
+              </motion.div>
             )}
 
             {/* CBT Info guidelines for tracking progress */}
             {activeMobileTab === "journal" && (
-              <div className="space-y-4 animate-in">
+              <motion.div
+                key="journal"
+                initial={{ opacity: 0, scale: 0.98, y: 12 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.98, y: -12 }}
+                transition={{ duration: 0.2 }}
+                className="space-y-4 text-left w-full"
+              >
                 {/* CBT Sleep & Mood informational capsule */}
-                <div className="bg-purple-100/50 dark:bg-gradient-to-tr dark:from-purple-950 dark:to-indigo-950 text-slate-900 dark:text-white rounded-3xl p-5 border border-purple-200 dark:border-purple-900/40 space-y-3.5 text-left shadow-sm">
+                <div className="bg-purple-100/60 dark:bg-gradient-to-tr dark:from-purple-950/40 dark:to-indigo-950/40 backdrop-blur-md text-slate-900 dark:text-white rounded-3xl p-5 border border-purple-200 dark:border-purple-900/40 space-y-3.5 shadow-sm">
                   <div className="flex items-center gap-2">
                     <Activity className="w-5 h-5 text-purple-600 dark:text-purple-350 animate-pulse font-bold" />
                     <span className="text-[10px] font-mono uppercase font-bold text-slate-500 dark:text-gray-300 tracking-wider">Concepto Clínico CBT + Maslow</span>
@@ -1231,15 +1293,9 @@ export default function PatientPortal({ therapistUid, therapistName, sessionPric
                     Anotar su ánimo nos permite visualizar juntos patrones automáticos de pensamiento cognitivo-conductual (CBT), facilitando un desglose objetivo en sus sesiones de progreso clínico.
                   </p>
                 </div>
-              </div>
-            )}
 
-             {/* RIGHT COLUMN: The CBT Interactive Mood Form */}
-            {activeMobileTab === "journal" && (
-              <div className="space-y-4 animate-in">
-              
-              {/* CBT New entry card */}
-              <div className="bg-white dark:bg-slate-900 border border-gray-150 dark:border-slate-850 rounded-3xl p-5 shadow-sm space-y-4 text-left">
+                {/* CBT New entry card */}
+                <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border border-gray-150 dark:border-slate-850 rounded-3xl p-5 shadow-sm space-y-4">
                 <h3 className="text-sm font-bold text-slate-1000 dark:text-white border-b border-slate-100 dark:border-slate-850 pb-2.5 flex items-center gap-2">
                   <Plus className="w-4.5 h-4.5 text-emerald-500" /> Nueva Bitácora de Registro Diario
                 </h3>
@@ -1278,7 +1334,12 @@ export default function PatientPortal({ therapistUid, therapistName, sessionPric
                         </div>
                       )}
 
-                      <form onSubmit={handleSubmitMoodDiary} className="space-y-4">
+                      <form 
+                        onSubmit={(e) => {
+                          handleSubmitMoodDiary(e);
+                        }} 
+                        className="space-y-4"
+                      >
                         {/* Mood Selector: Clickable premium emojis */}
                         <div className="space-y-2">
                           <span className="text-[10px] uppercase font-bold text-slate-500 block">¿Cómo evalúa su Estado de Ánimo hoy?</span>
@@ -1291,7 +1352,13 @@ export default function PatientPortal({ therapistUid, therapistName, sessionPric
                                   key={mIdx}
                                   type="button"
                                   disabled={alreadySubmitted || isSubmittingLog}
-                                  onClick={() => setNewMood(mIdx)}
+                                  onMouseEnter={() => {
+                                    if (!alreadySubmitted) soundFX.playTick();
+                                  }}
+                                  onClick={() => {
+                                    soundFX.playPop();
+                                    setNewMood(mIdx);
+                                  }}
                                   className={`p-3 rounded-2xl border text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-1.5 ${
                                     isSelected
                                       ? "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-400 scale-103 shadow-xs font-bold"
@@ -1313,7 +1380,7 @@ export default function PatientPortal({ therapistUid, therapistName, sessionPric
                           <div className="space-y-1.5 p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-150 dark:border-slate-85">
                             <div className="flex justify-between items-center">
                               <span className="text-[10px] uppercase font-bold text-slate-500">Horas de Sueño</span>
-                              <span className="text-xs font-mono font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-0.5 rounded border border-emerald-200">
+                              <span className="text-xs font-mono font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-955/40 px-2.5 py-0.5 rounded border border-emerald-200">
                                 {newSleepHours} hrs
                               </span>
                             </div>
@@ -1331,7 +1398,7 @@ export default function PatientPortal({ therapistUid, therapistName, sessionPric
                           </div>
 
                           {/* Sleep Quality Score */}
-                          <div className="space-y-1.5 p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-150 dark:border-slate-85">
+                          <div className="space-y-1.5 p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-955 border border-slate-150 dark:border-slate-85">
                             <span className="text-[10px] uppercase font-bold text-slate-500 block">Calidad Reparadora del Sueño</span>
                             <select
                               disabled={alreadySubmitted}
@@ -1365,10 +1432,16 @@ export default function PatientPortal({ therapistUid, therapistName, sessionPric
                         <button
                           type="submit"
                           disabled={alreadySubmitted || isSubmittingLog}
-                          className={`w-full text-white text-xs font-extrabold py-3.5 rounded-xl transition duration-250 shadow flex items-center justify-center gap-1.5 uppercase cursor-pointer ${
+                          onMouseEnter={() => {
+                            if (!alreadySubmitted) soundFX.playTick();
+                          }}
+                          onClick={() => {
+                            if (!alreadySubmitted) soundFX.playChime();
+                          }}
+                          className={`w-full text-white text-xs font-extrabold py-3.5 rounded-xl transition duration-250 shadow flex items-center justify-center gap-1.5 uppercase cursor-pointer hover:scale-101 active:scale-99 ${
                             alreadySubmitted
-                              ? "bg-slate-350 dark:bg-slate-800 text-slate-500 dark:text-slate-500 cursor-not-allowed bg-slate-300"
-                              : "bg-emerald-600 hover:bg-emerald-700 active:scale-99"
+                              ? "bg-slate-350 dark:bg-slate-800 text-slate-500 dark:text-slate-500 cursor-not-allowed bg-slate-300 pointer-events-none"
+                              : "bg-emerald-600 hover:bg-emerald-700"
                           }`}
                         >
                           {alreadySubmitted ? "Auto-Reporte Diario Completado ✓" : isSubmittingLog ? "Guardando Registro Clínico..." : "Guardar Auto-Reporte Diario 🍃"}
@@ -1381,7 +1454,7 @@ export default function PatientPortal({ therapistUid, therapistName, sessionPric
 
               {/* Plotted trajectory */}
               {moodLogs.length > 0 && (
-                <div className="bg-white dark:bg-slate-900 border border-gray-150 dark:border-slate-850 rounded-3xl p-5 shadow-sm space-y-4 text-left">
+                <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border border-gray-150 dark:border-slate-850 rounded-3xl p-5 shadow-sm space-y-4 text-left">
                   <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-850 pb-2.5">
                     <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
                       <TrendingUp className="w-4 h-4 text-emerald-500" /> Mi Bitácora en el Tiempo (CBT)
@@ -1392,7 +1465,7 @@ export default function PatientPortal({ therapistUid, therapistName, sessionPric
                     </div>
                   </div>
 
-                  <div className="bg-slate-50 dark:bg-slate-950 rounded-2xl p-4 border border-slate-100 dark:border-slate-850">
+                  <div className="bg-slate-50/50 dark:bg-slate-950/45 rounded-2xl p-4 border border-slate-100 dark:border-slate-850">
                     {renderInteractiveSvgChart()}
                   </div>
                 </div>
@@ -1400,7 +1473,7 @@ export default function PatientPortal({ therapistUid, therapistName, sessionPric
 
               {/* History list of entries */}
               {moodLogs.length > 0 && (
-                <div className="bg-white dark:bg-slate-900 border border-gray-150 dark:border-slate-850 rounded-3xl p-5 shadow-sm space-y-4 text-left">
+                <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border border-gray-150 dark:border-slate-850 rounded-3xl p-5 shadow-sm space-y-4 text-left">
                   <h3 className="text-sm font-bold text-slate-1000 dark:text-white border-b border-slate-100 dark:border-slate-850 pb-2.5 flex items-center gap-2">
                     <Clock className="w-4 h-4 text-emerald-500" /> Historial de Auto-Reportes
                   </h3>
@@ -1408,13 +1481,12 @@ export default function PatientPortal({ therapistUid, therapistName, sessionPric
                   <div className="space-y-3 max-h-[250px] overflow-y-auto pr-1">
                     {moodLogs.map((log) => {
                       const mInfo = getMoodEmojiInfo(log.mood);
-                      const sInfo = getSleepQualityInfo(log.sleepScore);
                       const logDate = log.createdAt?.seconds 
                         ? new Date(log.createdAt.seconds * 1000).toLocaleDateString("es-CL", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })
                         : "Hace instantes";
 
                       return (
-                        <div key={log.id} className="p-3.5 bg-slate-50 dark:bg-slate-950 border border-slate-150 dark:border-slate-85 rounded-2xl space-y-2">
+                        <div key={log.id} className="p-3.5 bg-slate-55/65 dark:bg-slate-955/35 border border-slate-150 dark:border-slate-85 rounded-2xl space-y-2">
                           <div className="flex flex-wrap justify-between items-center gap-2">
                             <span className="text-[10px] font-bold text-gray-500 dark:text-slate-400">{logDate}</span>
                             <div className="flex gap-1.5">
@@ -1427,7 +1499,7 @@ export default function PatientPortal({ therapistUid, therapistName, sessionPric
                             </div>
                           </div>
                           {log.cognitiveNote ? (
-                            <p className="text-[11px] leading-relaxed text-slate-705 dark:text-gray-300 italic bg-white dark:bg-slate-900/50 p-2.5 rounded-xl border border-gray-100 dark:border-slate-850">
+                            <p className="text-[11px] leading-relaxed text-slate-705 dark:text-gray-300 italic bg-white/70 dark:bg-slate-900/50 p-2.5 rounded-xl border border-gray-100 dark:border-slate-850">
                               "{log.cognitiveNote}"
                             </p>
                           ) : (
@@ -1440,8 +1512,9 @@ export default function PatientPortal({ therapistUid, therapistName, sessionPric
                 </div>
               )}
 
-              </div>
+              </motion.div>
             )}
+            </AnimatePresence>
 
           </div>
 
