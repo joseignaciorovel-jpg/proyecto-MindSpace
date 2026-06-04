@@ -26,7 +26,13 @@ export default function ClinicianAgenda({ therapistUid, onJoinCall }: ClinicianA
 
   // AgendaPro-Style Interactive Calendar View State
   const [viewMode, setViewMode] = useState<"calendar" | "list">("calendar");
-  const [calendarSelectedDate, setCalendarSelectedDate] = useState<string>("2026-05-25"); // Anchor day corresponding to current system time
+  const [calendarSelectedDate, setCalendarSelectedDate] = useState<string>(() => {
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, "0");
+    const dd = String(today.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+  }); // Anchor day corresponding to current system time
 
   // Customized notification matrices (persisted in localStorage for tactile feedback)
   const [notifEmailRes, setNotifEmailRes] = useState(() => {
@@ -590,8 +596,9 @@ export default function ClinicianAgenda({ therapistUid, onJoinCall }: ClinicianA
 
   // Analyze imminent Chilean holidays based on current date
   const getUpcomingAnalysis = () => {
-    // Standard system date (current target: 2026-05-25)
-    const baseDate = new Date("2026-05-25T00:00:00");
+    // Standard system date (current target: dynamic today)
+    const baseDate = new Date();
+    baseDate.setHours(0, 0, 0, 0);
     
     return CHILEAN_HOLIDAYS_2026_2027
       .map(h => {
@@ -1802,7 +1809,13 @@ export default function ClinicianAgenda({ therapistUid, onJoinCall }: ClinicianA
                 
                 <button
                   type="button"
-                  onClick={() => setCalendarSelectedDate("2026-05-25")}
+                  onClick={() => {
+                    const today = new Date();
+                    const yyyy = today.getFullYear();
+                    const mm = String(today.getMonth() + 1).padStart(2, "0");
+                    const dd = String(today.getDate()).padStart(2, "0");
+                    setCalendarSelectedDate(`${yyyy}-${mm}-${dd}`);
+                  }}
                   className="px-3 py-1.5 bg-slate-100 hover:bg-slate-205 text-slate-705 text-xs font-bold rounded-xl cursor-pointer"
                 >
                   Hoy
