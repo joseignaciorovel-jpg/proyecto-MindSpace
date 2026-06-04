@@ -14,15 +14,29 @@ import AbbyAssistant from "./components/AbbyAssistant";
 import PatientPortal from "./components/PatientPortal";
 import ShareReputationModal from "./components/ShareReputationModal";
 import FluidBackground from "./components/FluidBackground";
+import { TermsOfServiceModal, PrivacyPolicyModal } from "./components/LegalModals";
 import { soundFX } from "./utils/soundFX";
 import { motion, AnimatePresence } from "motion/react";
 import { Calendar, BookOpen, CreditCard, LogIn, LogOut, Video, Heart, Globe, Settings, Lock, Sparkles, MessageSquare, ShieldCheck, Clipboard, Star, Share2, ChevronLeft, ChevronRight, Sun, Moon, Phone, Smile, ShieldAlert, Activity, Clock, ChevronDown, Volume2, VolumeX } from "lucide-react";
+
+const formatReviewDate = (createdAt: any) => {
+  if (!createdAt) return "Reciente";
+  try {
+    const d = createdAt.toDate ? createdAt.toDate() : (createdAt.seconds ? new Date(createdAt.seconds * 1000) : new Date(createdAt));
+    const formatted = d.toLocaleDateString("es-CL", { month: "long", year: "numeric" });
+    return formatted.charAt(0).toUpperCase() + formatted.slice(1);
+  } catch (e) {
+    return "Reciente";
+  }
+};
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [shareModalOpen, setShareModalOpen] = useState(false);
+  const [termsModalOpen, setTermsModalOpen] = useState(false);
+  const [privacyModalOpen, setPrivacyModalOpen] = useState(false);
 
   // Theme State management (Light / Dark mode toggle)
   const [darkMode, setDarkMode] = useState<boolean>(() => {
@@ -540,20 +554,46 @@ export default function App() {
           /* Scenario 2: Standard modes (Public or Private Dashboard) */
           <>
             {portalMode === "public" ? (
-              <div className="space-y-8 animate-in fade-in duration-200">
+              <div className="space-y-16 sm:space-y-24 animate-in fade-in duration-300">
                 {/* Visual Intro hero for patients */}
-                <div className="text-center max-w-2xl mx-auto space-y-3 pb-4 border-b border-gray-100 dark:border-slate-800">
-                  <h2 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight leading-none sm:text-4xl animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="text-center max-w-3xl mx-auto space-y-5 pb-8">
+                  <h2 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight leading-tight sm:text-4xl md:text-5xl animate-in fade-in slide-in-from-bottom-4 duration-500">
                     Atención Psicológica Online Profesional
                   </h2>
-                  <p className="text-base text-slate-600 dark:text-slate-400">
+                  <p className="text-base text-slate-600 dark:text-slate-400 max-w-2xl mx-auto leading-relaxed">
                     Reserva tus sesiones de terapia individual desde el calendario público certificado. Todos tus datos y videoconsultas están protegidas bajo estrictas normativas sanitarias y de cifrado E2EE.
                   </p>
+                  
+                  {/* Above the Fold Direct booking CTA actions */}
+                  <div className="pt-4 flex flex-wrap justify-center gap-4 animate-in fade-in slide-in-from-bottom-5 duration-700">
+                    <button
+                      onClick={() => {
+                        const el = document.getElementById("booking-section");
+                        if (el) {
+                          el.scrollIntoView({ behavior: "smooth" });
+                        }
+                      }}
+                      className="bg-slate-950 hover:bg-black dark:bg-white dark:hover:bg-slate-100 dark:text-slate-950 text-white font-extrabold text-[11px] sm:text-xs px-6 py-4 rounded-xl transition-all duration-150 transform hover:scale-102 active:scale-98 shadow-md hover:shadow-lg uppercase tracking-wider cursor-pointer flex items-center gap-2"
+                    >
+                      <Calendar className="w-4 h-4" /> Ver Horas Disponibles
+                    </button>
+                    <button
+                      onClick={() => {
+                        const bubble = document.getElementById("abby-launcher-bubble");
+                        if (bubble) {
+                          bubble.click();
+                        }
+                      }}
+                      className="bg-white/80 hover:bg-slate-50 dark:bg-slate-900/80 dark:hover:bg-slate-850/80 text-slate-800 dark:text-slate-200 font-extrabold text-[11px] sm:text-xs px-6 py-4 rounded-xl border border-gray-200 dark:border-slate-800 transition-all duration-150 uppercase tracking-wider cursor-pointer flex items-center gap-2 shadow-xs"
+                    >
+                      <MessageSquare className="w-4 h-4 text-emerald-500" /> Consultar con Abby AI
+                    </button>
+                  </div>
                 </div>
 
                 {/* Visual public evaluation feedback carousel slider */}
                 {publicReviews.length > 0 && (
-                  <div className="max-w-2xl mx-auto bg-white dark:bg-slate-900 rounded-3xl border border-gray-150 dark:border-slate-800 p-6 sm:p-8 shadow-md text-center space-y-4 relative overflow-hidden transition-all duration-300">
+                  <div className="max-w-2xl mx-auto bg-white/70 dark:bg-slate-900/75 backdrop-blur-md rounded-3xl border border-gray-100/70 dark:border-slate-800/60 p-6 sm:p-8 shadow-xs text-center space-y-4 relative overflow-hidden transition-all duration-300">
                     <div className="flex justify-between items-center border-b border-gray-100 dark:border-slate-800 pb-3 mb-1">
                       <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide flex items-center gap-1">
                         <Heart className="w-3.5 h-3.5 text-rose-500 fill-rose-500 animate-pulse" />
@@ -583,10 +623,15 @@ export default function App() {
                         "{publicReviews[activeReviewIdx].comment || "Excelente atención profesional."}"
                       </blockquote>
 
-                      <div className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1 justify-center">
-                        <span>— {publicReviews[activeReviewIdx].patientName}</span>
-                        <span className="text-[9.5px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.2 rounded border border-emerald-200 dark:border-emerald-900/50 uppercase">
-                          ✓ Reseña Verificada
+                      <div className="flex flex-col items-center gap-1 text-center">
+                        <div className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center justify-center gap-2 flex-wrap">
+                          <span>— {publicReviews[activeReviewIdx].patientName}</span>
+                          <span className="text-[9.5px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-900/50 uppercase tracking-wider scale-95 shrink-0">
+                            ✓ Reseña Verificada
+                          </span>
+                        </div>
+                        <span className="text-slate-400 dark:text-slate-500 text-[10.5px] font-medium font-sans">
+                          {formatReviewDate(publicReviews[activeReviewIdx].createdAt)}
                         </span>
                       </div>
                     </div>
@@ -631,19 +676,19 @@ export default function App() {
                 )}
 
                 {/* Professional Scholarly Profile Section */}
-                <div className="pt-4 border-t border-gray-100 dark:border-slate-800">
-                  <div className="text-center max-w-xl mx-auto space-y-1 mb-2">
-                    <h3 className="text-xl font-extrabold text-slate-900 dark:text-white tracking-tight animate-in fade-in slide-in-from-bottom-3 duration-500">Sobre el Especialista</h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">Conozca la trayectoria clínica, formación y experiencia de su profesional antes de agendar.</p>
+                <div className="pt-12 sm:pt-16 border-t border-gray-100/60 dark:border-slate-900/40">
+                  <div className="text-center max-w-xl mx-auto space-y-1 mb-8">
+                    <h3 className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight animate-in fade-in slide-in-from-bottom-3 duration-500">Sobre el Especialista</h3>
+                    <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">Conozca la trayectoria clínica, formación y experiencia de su profesional antes de agendar.</p>
                   </div>
                   <ProfessionalProfile settings={settings} />
                 </div>
 
                 {/* Booking Section */}
-                <div className="pt-8 border-t border-gray-100 dark:border-slate-800">
-                  <div className="text-center max-w-xl mx-auto space-y-1 mb-6">
-                    <h3 className="text-xl font-extrabold text-slate-900 dark:text-white tracking-tight animate-in fade-in slide-in-from-bottom-3 duration-500">Agenda de Horas Clínicas</h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">Seleccione un día y bloque de horario certificado para registrar su consulta.</p>
+                <div id="booking-section" className="pt-12 sm:pt-16 border-t border-gray-100/60 dark:border-slate-900/40">
+                  <div className="text-center max-w-xl mx-auto space-y-1 mb-8">
+                    <h3 className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight animate-in fade-in slide-in-from-bottom-3 duration-500">Agenda de Horas Clínicas</h3>
+                    <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-sans">Seleccione un día y bloque de horario certificado para registrar su consulta.</p>
                   </div>
                   <BookingCalendar
                     therapistUid={therapistUid}
@@ -1108,9 +1153,9 @@ export default function App() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 flex flex-col sm:flex-row justify-between items-center gap-4 text-center">
           <p>© 2026 MindSpace Clínica Digital. Todos los derechos reservados.</p>
           <div className="flex gap-4 font-semibold text-slate-600 dark:text-slate-500 flex-wrap justify-center sm:justify-start">
-            <span className="hover:text-emerald-500 cursor-pointer transition">Términos de Servicio</span>
+            <span onClick={() => setTermsModalOpen(true)} className="hover:text-emerald-500 cursor-pointer transition">Términos de Servicio</span>
             <span>·</span>
-            <span className="hover:text-emerald-500 cursor-pointer transition">Políticas de Privacidad Médica</span>
+            <span onClick={() => setPrivacyModalOpen(true)} className="hover:text-emerald-500 cursor-pointer transition">Políticas de Privacidad Médica</span>
             <span>·</span>
             <button
               onClick={() => {
@@ -1131,6 +1176,16 @@ export default function App() {
         onClose={() => setShareModalOpen(false)}
         therapistName={user?.displayName || "Ps. José Ignacio Romero Velásquez"}
         therapistEmail={user?.email || "joseignacio.rovel@gmail.com"}
+      />
+
+      {/* Terms of Service & Privacy modals */}
+      <TermsOfServiceModal
+        isOpen={termsModalOpen}
+        onClose={() => setTermsModalOpen(false)}
+      />
+      <PrivacyPolicyModal
+        isOpen={privacyModalOpen}
+        onClose={() => setPrivacyModalOpen(false)}
       />
 
     </div>

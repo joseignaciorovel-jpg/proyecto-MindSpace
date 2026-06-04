@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { collection, doc, setDoc, updateDoc, Timestamp } from "firebase/firestore";
 import { db, handleFirestoreError, OperationType } from "../firebase";
 import { Appointment } from "../types";
-import { Calendar as CalendarIcon, Clock, CreditCard, ShieldCheck, Mail, CheckCircle2, AlertTriangle, MessageSquare, Info, ZoomIn, ZoomOut, Home } from "lucide-react";
+import { Calendar as CalendarIcon, Clock, CreditCard, ShieldCheck, Mail, CheckCircle2, AlertTriangle, MessageSquare, Info, ZoomIn, ZoomOut, Home, Heart } from "lucide-react";
 
 interface BookingCalendarProps {
   therapistUid: string;
@@ -359,6 +359,23 @@ export default function BookingCalendar({
       <div className="p-3 sm:p-5 md:p-8">
         {step === "details" && (
           <form onSubmit={handleNextToPayment} className="space-y-6">
+            {/* Dynamic Price Banner */}
+            <div className="bg-emerald-500/5 dark:bg-emerald-900/10 border border-emerald-500/20 dark:border-emerald-800/30 p-4 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-in fade-in duration-300">
+              <div className="flex items-start gap-3">
+                <div className="p-2 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 rounded-lg shrink-0 mt-0.5">
+                  <Heart className="w-4 h-4" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-slate-900 dark:text-slate-100">Arancel de Consulta Privada</p>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-normal">Atención psicológica clínica directa libre de convenios con Isapres o reembolsos estatales.</p>
+                </div>
+              </div>
+              <div className="text-left sm:text-right shrink-0">
+                <span className="text-lg font-black text-emerald-600 dark:text-emerald-400 font-sans">${sessionPrice.toLocaleString("es-CL")} CLP</span>
+                <span className="block text-[8px] text-slate-400 uppercase tracking-widest font-mono font-bold">Por Sesión (60 Min.)</span>
+              </div>
+            </div>
+
             <div className={`grid grid-cols-1 ${compact ? "" : "md:grid-cols-2"} gap-6`}>
               {/* Left Col: Date & Slot Pick */}
               <div className="space-y-4">
@@ -549,14 +566,14 @@ export default function BookingCalendar({
             </div>
 
             {/* Price notification */}
-            <div className="bg-slate-50 rounded-xl p-4 flex items-start gap-3 border border-slate-100">
-              <Info className="w-5 h-5 text-slate-600 mt-0.5 flex-shrink-0" />
+            <div className="bg-slate-50 dark:bg-slate-950/40 rounded-xl p-4 flex items-start gap-3 border border-slate-100 dark:border-slate-850">
+              <Info className="w-5 h-5 text-slate-400 mt-0.5 flex-shrink-0" />
               <div>
-                <p className="text-xs text-slate-600">
+                <p className="text-xs text-slate-600 dark:text-slate-400">
                   Las consultas tienen una duración reglamentaria de <strong>60 minutos</strong>. Se realizan a través de nuestra sala cifrada integrada de video WebRTC de grado médico.
                 </p>
-                <p className="text-sm font-semibold text-slate-900 mt-1">
-                  Arancel de Consulta: ${sessionPrice.toLocaleString("es-CL")} CLP
+                <p className="text-sm font-semibold text-slate-900 dark:text-slate-200 mt-1">
+                  Arancel de Consulta Privada: ${sessionPrice.toLocaleString("es-CL")} CLP
                 </p>
               </div>
             </div>
@@ -579,7 +596,7 @@ export default function BookingCalendar({
             <div className="border border-sky-200 bg-sky-50/50 p-4 rounded-xl flex items-start gap-2.5 text-xs text-sky-800">
               <ShieldCheck className="w-5 h-5 text-sky-600 mt-0.5 flex-shrink-0" />
               <div>
-                <strong>Pasarela Homologada (Flow Chile):</strong> Su orden será procesada de forma segura mediante Webpay Plus. Al autorizar su pago, el portal clínico emitirá automáticamente su <strong>Boleta de Honorarios Electrónica (BHE)</strong> aprobada ante el SII para su reembolso en Isapre/Fonasa.
+                <strong>Pasarela Homologada (Flow Chile):</strong> Su orden será procesada de forma segura mediante Webpay Plus. Al autorizar su pago, el portal clínico emitirá automáticamente su <strong>Boleta de Honorarios Electrónica (BHE)</strong> aprobada ante el SII como respaldo fiscal de su consulta de psicología privada.
               </div>
             </div>
 

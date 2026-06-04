@@ -1032,7 +1032,7 @@ export default function PatientPortal({ therapistUid, therapistName, sessionPric
                                   rel="noreferrer"
                                   className="mt-2 w-full bg-slate-900 hover:bg-slate-950 dark:bg-slate-800 dark:hover:bg-slate-750 text-white p-2 rounded-xl text-[10px] font-extrabold flex items-center justify-center gap-1 hover:brightness-110 active:scale-98 transition duration-100 uppercase"
                                 >
-                                  📥 Descargar BHE Reemb. Isapre
+                                  📥 Descargar Boleta de Honorarios (BHE)
                                 </a>
                               ) : (
                                 <a 
@@ -1041,7 +1041,7 @@ export default function PatientPortal({ therapistUid, therapistName, sessionPric
                                   rel="noreferrer"
                                   className="mt-2 w-full bg-slate-900 hover:bg-slate-950 dark:bg-slate-800 dark:hover:bg-slate-750 text-white p-2 rounded-xl text-[10px] font-extrabold flex items-center justify-center gap-1 hover:brightness-110 active:scale-98 transition duration-100 uppercase"
                                 >
-                                  📥 Descargar BHE Reemb. Isapre
+                                  📥 Descargar Boleta de Honorarios (BHE)
                                 </a>
                               )}
                             </div>

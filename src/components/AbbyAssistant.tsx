@@ -125,7 +125,7 @@ export default function AbbyAssistant({ mode, therapistUid, therapistName, setti
       sender: "abby",
       text: mode === "doctor" || mode === "doctor_floating"
         ? `Hola Dr. ${therapistName || "Romero"}. Estoy aquí para asistirle hoy. Puede escribir o mantener presionado el micrófono para hablarme. Ej: "Abby, ¿qué paciente viene ahora?" o si ocurre un imprevisto "Necesito suspender las consultas de hoy por una emergencia".`
-        : `¡Hola! Soy Abby, la asistente virtual de la consulta del especialidado. ¿En qué puedo orientarte hoy respecto a tu agenda, aranceles, reembolsos de Fonasa/Isapre, o resguardo de privacidad médica en Chile (Ley 19.628)?`,
+        : `¡Hola! Soy Abby, tu asistente administrativa de Inteligencia Artificial de la consulta. Es muy importante que sepas que mi rol es únicamente orientarte en la gestión de tu agenda, aranceles y consultas técnicas de conexión. No soy una terapeuta ni ofrezco asistencia psicológica clínica directa, y no gestionamos convenios de Isapres o reembolsos previsionales.`,
       timestamp: new Date()
     }
   ]);
@@ -387,11 +387,11 @@ export default function AbbyAssistant({ mode, therapistUid, therapistName, setti
       replyText = `El resguardo ético y legal de tu información clínica es nuestra prioridad número uno:
 - Cada registro de historial, nota o diagnóstico que el especialista ingrese se encripta de forma exclusiva en servidores de Cloud Firestore.
 - En total conformidad con la **Ley 19.628 sobre protección de datos de carácter personal en Chile**, ningún dato sensible o de ficha médica es compartido sin tu explícito y firmado consentimiento.
-- Además de conformidad con la **Ley 20.584**, se garantiza el cuidado, respeto, trato digno e confidencialidad médica garantizada.`;
-    } else if (questionType === "reimbursement") {
-      replyText = `¡Así es! Todos los reembolsos ante Fonasa, Isapre (Colmena, Consalud, Banmédica, Cruz Blanca) o seguros complementarios de salud son perfectamente compatibles:
-- Al concretar la hora simulada de tu sesión, el sistema te emitirá automáticamente un **comprobante electrónico / boleta de honorarios médicos**.
-- Este comprobante incluye de forma transparente el **Código de Registro Nacional de Prestadores Individuales de la Superintendencia de Salud** de su Ps. José Ignacio (Reg Nº ${settings?.sisNumber || "482931"}), lo que valida tu reembolso ante tu entidad previsional.`;
+- De conformidad con la **Ley 20.584**, se garantiza el cuidado, respeto, trato digno y confidencialidad médica absoluta.`;
+    } else if (questionType === "pricing") {
+      replyText = `La consulta opera bajo modalidad privada para resguardar la máxima autonomía clínico-profesional de tu tratamiento:
+- El precio de la sesión se detalla transparentemente al momento de agendar horas en nuestro calendario interactivo.
+- El pago se procesa de forma directa y blindada. Al finalizar exitosamente la reserva, la plataforma te otorgará automáticamente tu Boleta de Honorarios Electrónica (BHE) aprobada por el SII como comprobante legal de tu consulta privada de psicología.`;
     } else if (questionType === "video_call") {
       replyText = `Nuestras consultas de telemedicina se realizan por videollamada cifrada de extremo a extremo:
 - Al agendar, recibirás una dirección de la sala confidencial con formato seguro cifrado por tokens.
@@ -400,7 +400,7 @@ export default function AbbyAssistant({ mode, therapistUid, therapistName, setti
 
     setChatLog(prev => [
       ...prev,
-      { sender: "user", text: `Quiero consultar sobre: ${questionType === "how_to_book" ? "¿Cómo agendar?" : questionType === "privacy" ? "Privacidad de datos" : questionType === "reimbursement" ? "Reembolso Isapre/Fonasa" : "Videollamada segura"}`, timestamp: new Date() },
+      { sender: "user", text: `Quiero consultar sobre: ${questionType === "how_to_book" ? "¿Cómo agendar?" : questionType === "privacy" ? "Privacidad de datos" : questionType === "pricing" ? "Aranceles de la Consulta" : "Videollamada segura"}`, timestamp: new Date() },
       { sender: "abby", text: replyText, timestamp: new Date() }
     ]);
     speak(replyText);
@@ -427,7 +427,8 @@ export default function AbbyAssistant({ mode, therapistUid, therapistName, setti
           query: queryStr,
           appointmentsText: getAppointmentsText(),
           therapistName: therapistName || "José Ignacio Rovel",
-          currentTime: new Date().toLocaleTimeString("es-CL", { hour: '2-digit', minute: '2-digit' })
+          currentTime: new Date().toLocaleTimeString("es-CL", { hour: '2-digit', minute: '2-digit' }),
+          mode: mode
         })
       });
 
@@ -1167,6 +1168,20 @@ export default function AbbyAssistant({ mode, therapistUid, therapistName, setti
                       : "bg-white dark:bg-slate-900 border border-gray-150 dark:border-slate-800 text-slate-800 dark:text-slate-100 rounded-tl-none font-semibold shadow-xs"
                   }`}>
                     <p className="whitespace-pre-line">{chat.text}</p>
+                    {chat.sender === "abby" && (chat.text.includes("agendar") || chat.text.includes("Calendario") || chat.text.includes("asistente") || chat.text.includes("arancel") || chat.text.includes("recomiendo") || chat.text.includes("horas")) && (
+                      <button
+                        onClick={() => {
+                          const el = document.getElementById("booking-section");
+                          if (el) {
+                            el.scrollIntoView({ behavior: "smooth" });
+                            setIsWidgetOpen(false);
+                          }
+                        }}
+                        className="mt-2 text-center w-full bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-slate-950 font-extrabold text-[10px] py-2 px-3.5 rounded-xl transition duration-150 flex items-center justify-center gap-1 shadow-sm uppercase tracking-wider cursor-pointer"
+                      >
+                        <Calendar className="w-3.5 h-3.5 text-slate-950" /> Ir al Calendario de Reservas
+                      </button>
+                    )}
                     <span className="text-[8.5px] text-gray-400 block mt-1 text-right font-mono font-bold">
                       {chat.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
@@ -1177,33 +1192,47 @@ export default function AbbyAssistant({ mode, therapistUid, therapistName, setti
 
             {/* Quick interactive buttons suggestion inside public widget */}
             <div className="p-3 bg-white dark:bg-slate-900 border-t border-gray-100 dark:border-slate-850 space-y-2">
+              
+              <button
+                onClick={() => {
+                  const el = document.getElementById("booking-section");
+                  if (el) {
+                    el.scrollIntoView({ behavior: "smooth" });
+                    setIsWidgetOpen(false);
+                  }
+                }}
+                className="w-full bg-slate-900 hover:bg-slate-950 border border-emerald-500 text-white font-extrabold text-[11px] p-2.5 rounded-xl transition flex items-center justify-center gap-1.5 shadow-md uppercase tracking-wider text-center cursor-pointer"
+              >
+                <Calendar className="w-4 h-4 text-emerald-400" /> Agendar Hora Médica 📅
+              </button>
+
               <span className="text-[8.5px] font-extrabold text-gray-400 block font-mono uppercase text-left">Preguntas frecuentes sugeridas:</span>
               
               <div className="grid grid-cols-2 gap-1.5">
                 <button
                   onClick={() => handlePatientFAQ("how_to_book")}
-                  className="p-1 px-2.5 border border-gray-150 dark:border-slate-800 bg-slate-50 hover:bg-slate-100 dark:bg-slate-950 rounded-xl text-[10px] text-left font-bold text-slate-700 dark:text-slate-300 transition shrink-0"
+                  className="p-1 px-2.5 border border-gray-150 dark:border-slate-800 bg-slate-50 hover:bg-slate-100 dark:bg-slate-950 rounded-xl text-[10px] text-left font-bold text-slate-700 dark:text-slate-300 transition shrink-0 cursor-pointer"
                 >
                   ¿Cómo agendar hora?
                 </button>
 
                 <button
-                  onClick={() => handlePatientFAQ("reimbursement")}
-                  className="p-1 px-2.5 border border-gray-150 dark:border-slate-800 bg-slate-50 hover:bg-slate-100 dark:bg-slate-950 rounded-xl text-[10px] text-left font-bold text-slate-700 dark:text-slate-300 transition shrink-0"
+                  onClick={() => handlePatientFAQ("pricing")}
+                  className="p-1 px-2.5 border border-gray-150 dark:border-slate-800 bg-slate-50 hover:bg-slate-100 dark:bg-slate-950 rounded-xl text-[10px] text-left font-bold text-slate-700 dark:text-slate-300 transition shrink-0 cursor-pointer"
                 >
-                  ¿Reembolso Isapre/Fonasa?
+                  ¿Aranceles de consulta?
                 </button>
 
                 <button
                   onClick={() => handlePatientFAQ("privacy")}
-                  className="p-1 px-2.5 border border-gray-150 dark:border-slate-800 bg-slate-50 hover:bg-slate-100 dark:bg-slate-950 rounded-xl text-[10px] text-left font-bold text-slate-700 dark:text-slate-300 transition shrink-0"
+                  className="p-1 px-2.5 border border-gray-150 dark:border-slate-800 bg-slate-50 hover:bg-slate-100 dark:bg-slate-950 rounded-xl text-[10px] text-left font-bold text-slate-700 dark:text-slate-300 transition shrink-0 cursor-pointer"
                 >
                   Privacidad Ley 19.628
                 </button>
 
                 <button
                   onClick={() => handlePatientFAQ("video_call")}
-                  className="p-1 px-2.5 border border-gray-150 dark:border-slate-800 bg-slate-50 hover:bg-slate-100 dark:bg-slate-950 rounded-xl text-[10px] text-left font-bold text-slate-700 dark:text-slate-300 transition shrink-0"
+                  className="p-1 px-2.5 border border-gray-150 dark:border-slate-800 bg-slate-50 hover:bg-slate-100 dark:bg-slate-950 rounded-xl text-[10px] text-left font-bold text-slate-700 dark:text-slate-300 transition shrink-0 cursor-pointer"
                 >
                   ¿Cómo es la videollamada?
                 </button>
@@ -1252,6 +1281,7 @@ export default function AbbyAssistant({ mode, therapistUid, therapistName, setti
 
       {/* Launcher Bubble */}
       <motion.button
+        id="abby-launcher-bubble"
         onClick={() => setIsWidgetOpen(!isWidgetOpen)}
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}

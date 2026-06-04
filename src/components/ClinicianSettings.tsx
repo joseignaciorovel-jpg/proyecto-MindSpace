@@ -463,7 +463,7 @@ export default function ClinicianSettings({ therapistUid, currentSettings, onSet
                     placeholder="Ej. 482931"
                   />
                 </div>
-                <p className="text-[10px] text-gray-400 dark:text-slate-500">Número oficial para acreditar validez de subsidios Isapre/Fonasa (Chile).</p>
+                <p className="text-[10px] text-gray-400 dark:text-slate-500">Número oficial para acreditar la validez de su título profesional clínico en Chile.</p>
               </div>
 
               <div className="space-y-1">
@@ -834,45 +834,48 @@ export default function ClinicianSettings({ therapistUid, currentSettings, onSet
         {activeSubTab === "billing_security" && (
           <div className="space-y-6 animate-in fade-in duration-200 text-left">
             {/* Security Explanation banner */}
-            <div className="bg-amber-500/10 border border-amber-500/20 p-4 rounded-2xl flex items-start gap-3">
-              <ShieldAlert className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+            <div className="bg-emerald-500/10 border border-emerald-500/20 p-4 rounded-2xl flex items-start gap-3">
+              <ShieldCheck className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
               <div>
-                <h5 className="text-xs font-bold text-amber-800 dark:text-amber-400 uppercase tracking-wide">Arquitectura de Ciberseguridad y Cumplimiento HIPAA</h5>
-                <p className="text-[11px] text-amber-700 dark:text-amber-300 mt-1 leading-relaxed">
-                  Para máxima protección de datos personales de salud (conforme a la <strong>Ley 19.628</strong> chilena y regulaciones HIPAA/PCI-DSS):
-                  Su cuenta bancaria <strong>nunca debe registrarse como números en texto plano</strong> en la base de datos de la app.
-                  Al conectarse de forma real, se utiliza la pasarela encriptada de <strong>Stripe Connect</strong>, lo que redirige la configuración sensible de forma segura a los servidores certificados de Stripe.
+                <h5 className="text-xs font-bold text-emerald-800 dark:text-emerald-400 uppercase tracking-wide">Criptografía y Flujo Seguro de Fondos con Flow.cl</h5>
+                <p className="text-[11px] text-slate-700 dark:text-slate-300 mt-1 leading-relaxed">
+                  Para tu total tranquilidad y conforme a la <strong>Ley 19.628</strong> sobre protección de datos privados:
+                  Los datos sensibles de tu cuenta bancaria (donde recibes el dinero recaudado de tus consultas) <strong>se configuran únicamente dentro del panel privado de la plataforma oficial de Flow (flow.cl)</strong>. 
+                  Nuestra aplicación jamás te solicitará claves bancarias ni registrará datos vulnerables. El dinero fluye de forma directa y garantizada a tu cuenta destinataria gracias a la encriptación bancaria de Flow.
                 </p>
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 font-sans">
               
-              {/* Stripe Connection Section */}
+              {/* Flow Integration Section */}
               <div className="border border-slate-150 dark:border-slate-800 rounded-3xl p-5 space-y-4 bg-slate-50/40 dark:bg-slate-950/20">
                 <div className="flex items-center gap-2 pb-2 border-b border-gray-100 dark:border-slate-800/80">
                   <CreditCard className="w-5 h-5 text-emerald-500" />
                   <span className="text-xs font-extrabold uppercase text-slate-800 dark:text-slate-200">
-                    Sincronización Payouts con Stripe 💳
+                    Sincronización Payouts con Flow Chile 🇨🇱
                   </span>
                 </div>
 
                 <div className="space-y-3">
                   <p className="text-[11px] text-gray-500 leading-normal font-sans">
-                    La consulta procesa cobros en pesos chilenos (CLP) de pacientes. Para recibir sus transferencias automáticas en su cuenta bancaria de Chile, conecte su cuenta a continuación.
+                    La consulta procesa cobros en pesos chilenos (CLP) mediante Webpay / Flow. Los datos a continuación son meramente de referencia local para tu contabilidad o para ofrecer transferencias directas/manuales si tus pacientes lo prefieren. Los fondos generales de tus reservas se depositan según tus plazos definidos en Flow.cl.
                   </p>
 
                   {stripeConnected ? (
                     <div className="bg-emerald-50/50 dark:bg-emerald-905/25 border border-emerald-100 dark:border-emerald-900 rounded-2xl p-4 space-y-3">
                       <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
                         <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                        <span className="text-[11px] font-bold uppercase font-sans">¡Conectado Exitosamente con Stripe!</span>
+                        <span className="text-[11px] font-bold uppercase font-sans">¡Sincronizado con Comercio Flow!</span>
                       </div>
                       <div className="text-[11.5px] space-y-1 text-slate-750 dark:text-slate-300">
-                        <p><strong>Banco Destinatario:</strong> {bankName || "Banco de Chile (Cuenta Corriente)"}</p>
+                        <p><strong>Banco de Referencia:</strong> {bankName || "Banco de Chile (Cuenta Corriente)"}</p>
                         <p><strong>Nº de Cuenta Encriptado:</strong> {bankAccountMasked || "•••• •••• ••84"}</p>
-                        <p><strong>Modo:</strong> Stripe Sandbox Individual</p>
+                        <p><strong>Modo:</strong> Simulación de Comercio Flow Activo</p>
                       </div>
+                      <p className="text-[10px] text-emerald-650 font-medium bg-emerald-50/50 px-2 py-1 rounded">
+                        🔒 Los fondos se transfieren en los plazos estipulados por Flow (Ej: D+1) de manera impenetrable.
+                      </p>
                       <button
                         type="button"
                         onClick={() => {
@@ -882,19 +885,19 @@ export default function ClinicianSettings({ therapistUid, currentSettings, onSet
                         }}
                         className="text-[10px] font-bold text-red-500 hover:underline hover:text-red-700 transition cursor-pointer"
                       >
-                        Desvincular Cuenta Stripe
+                        Desvincular Cuenta de Referencia
                       </button>
                     </div>
                   ) : (
                     <div className="space-y-4 font-sans">
                       <div className="bg-slate-100 dark:bg-slate-900 p-3 rounded-xl border border-dashed text-center text-xs text-gray-400 font-sans">
-                        No hay cuenta bancaria conectada a la pasarela aún. Las boletas y cobros se mantendrán en balance del sistema de forma segura.
+                        No hay cuenta bancaria para transferencias manuales registrada aún. Tus transacciones de Flow continuarán operando con normalidad.
                       </div>
 
                       <div className="space-y-3 border-t border-slate-100 dark:border-slate-800 pt-3">
                         <div className="grid grid-cols-2 gap-2">
                           <div className="space-y-1">
-                            <label className="text-[10px] font-bold text-slate-500 uppercase block">Nombre del Banco</label>
+                            <label className="text-[10px] font-bold text-slate-505 uppercase block">Tu Banco de Recibos</label>
                             <select
                               value={bankName}
                               onChange={(e) => setBankName(e.target.value)}
@@ -910,13 +913,13 @@ export default function ClinicianSettings({ therapistUid, currentSettings, onSet
                             </select>
                           </div>
                           <div className="space-y-1">
-                            <label className="text-[10px] font-bold text-slate-505 uppercase block">Referencia de Cuenta</label>
+                            <label className="text-[10px] font-bold text-slate-505 uppercase block">Nº de Cuenta (Opcional)</label>
                             <input
                               type="text"
                               value={bankAccountMasked}
                               placeholder="Ej. Vista 12-34-5"
                               onChange={(e) => setBankAccountMasked(e.target.value)}
-                              className="w-full px-3 py-1.5 border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 text-xs font-medium focus:border-slate-400 text-slate-800 dark:text-white"
+                              className="w-full px-3 py-1.5 border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 text-xs font-medium focus:border-slate-400 text-slate-805 dark:text-white"
                             />
                           </div>
                         </div>
@@ -925,14 +928,14 @@ export default function ClinicianSettings({ therapistUid, currentSettings, onSet
                           type="button"
                           onClick={() => {
                             if (!bankName || !bankAccountMasked) {
-                              alert("Por favor seleccione un banco y proporcione una referencia de cuenta para simular la vinculación.");
+                              alert("Por favor seleccione un banco y proporcione su número de cuenta de transferencia.");
                               return;
                             }
                             setStripeConnected(true);
                           }}
-                          className="w-full bg-[#635BFF] hover:bg-[#5347EB] text-white p-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 shadow cursor-pointer active:scale-95 duration-150"
+                          className="w-full bg-[#1e293b] hover:bg-slate-800 text-white p-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 shadow cursor-pointer active:scale-95 duration-150"
                         >
-                          Conectar Cuenta Bancaria mediante Stripe Connect <ArrowUpRight className="w-3.5 h-3.5" />
+                          Guardar Datos de Referencia / Transferencia Directa <ArrowUpRight className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     </div>

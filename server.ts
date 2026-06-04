@@ -747,7 +747,7 @@ function getAbbyLocalFallback(userQuery: string, appointmentsText: string, thera
 
 // Abby Assistant Multi-Modal Conversational Endpoint
 app.post("/api/gemini/abby", async (req, res) => {
-  const { query: userQuery, appointmentsText, therapistName, currentTime } = req.body;
+  const { query: userQuery, appointmentsText, therapistName, currentTime, mode } = req.body;
   if (!userQuery) {
     return res.status(400).json({ error: "Missing message query for Abby" });
   }
@@ -769,7 +769,33 @@ app.post("/api/gemini/abby", async (req, res) => {
 
   try {
     const ai = getGeminiClient();
-    const prompt = `Actúa como Abby, la asistente administrativa virtual de inteligencia artificial del psicólogo/a clínico ${therapistName || "José Ignacio Rovel"}.
+    
+    // Choose prompt based on mode (if patient or doctor mode)
+    let prompt = "";
+    if (mode === "patient") {
+      prompt = `Actúa como Abby, la asistente administrativa de Inteligencia Artificial de la consulta de psicología privada de ${therapistName || "José Ignacio Rovel"}.
+Tu tono con los pacientes de la consulta debe ser excepcionalmente cálido, empático, claro, respetuoso y con modismos sutiles chilenos de ambiente clínico para transmitir cercanía y confianza.
+
+REGLAS CRÍTICAS DE ACCIÓN Y ROL:
+1. Rol No Clínico: Tu rol es estrictamente administrativo y de soporte de conexión. Es sumamente importante que dejes en claro con tacto y amabilidad que eres una Inteligencia Artificial, que no eres terapeuta ni ofreces asistencia psicológica o clínica directa.
+2. Consulta Privada: Esta consulta opera de forma totalmente privada para resguardar la máxima autonomía clínico-profesional de tu tratamiento. NO hables de reembolsos ante Fonasa, Isapres o seguros de salud (establece claramente que no los gestionamos).
+3. Redirección al Calendario: Incentiva activamente que el paciente reserve o registre su consulta utilizando el botón "Ir al Calendario de Reservas" o "Agendar Hora Médica" que se despliega directamente en el chat.
+4. Información sobre el sistema hoy:
+- Hora actual del sistema: ${currentTime || new Date().toLocaleTimeString()}
+
+Analiza el requerimiento o pregunta del paciente:
+"${userQuery}"
+
+Formato esperado de respuesta (JSON únicamente):
+{
+  "reply": "Tu mensaje afectuoso e informativo respondiendo al paciente.",
+  "triggerAction": "none",
+  "reason": "Pregunta de paciente atendida."
+}
+
+No uses markdown rodeando el JSON ni bloques de código que lo impidan parsear, o alternativamente asegúrate de que sea JSON válido.`;
+    } else {
+      prompt = `Actúa como Abby, la asistente administrativa virtual de inteligencia artificial del psicólogo/a clínico ${therapistName || "José Ignacio Rovel"}.
 Tu tono debe ser excepcionalmente empático, profesional, claro y respetuoso, utilizando leves giros de lenguaje chilenos cálidos de ambiente clínico para transmitir cercanía ("entiendo perfectamente", "por supuesto", "cuente con ello", "ningun problema").
 Estás brindando soporte directo al profesional en su panel privado.
 
@@ -794,6 +820,7 @@ Formato esperado de respuesta (JSON únicamente):
 }
 
 No uses markdown rodeando el JSON ni bloques de código que lo impidan parsear, o alternativamente asegúrate de que sea JSON válido.`;
+    }
 
     const response = await ai.models.generateContent({
       model: "gemini-3.5-flash",
