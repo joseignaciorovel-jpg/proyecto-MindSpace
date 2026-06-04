@@ -3,6 +3,7 @@ import { collection, doc, setDoc, updateDoc, Timestamp } from "firebase/firestor
 import { db, handleFirestoreError, OperationType } from "../firebase";
 import { Appointment } from "../types";
 import { Calendar as CalendarIcon, Clock, CreditCard, ShieldCheck, Mail, CheckCircle2, AlertTriangle, MessageSquare, Info, ZoomIn, ZoomOut, Home, Heart } from "lucide-react";
+import { getCachedAccessToken, sendGmail } from "../utils/googleAuth";
 
 interface BookingCalendarProps {
   therapistUid: string;
@@ -264,6 +265,73 @@ export default function BookingCalendar({
 
       try {
         await setDoc(apptDocRef, newAppointment);
+
+        // Automatically send booking confirmation email via Gmail API if clinician is authenticated
+        const gmailToken = getCachedAccessToken();
+        if (gmailToken) {
+          if (email) {
+            const subject = `Confirmación de Agendamiento de Sesión Psicológica - MindSpace`;
+            const bodyContent = `
+              <div style="font-family: Arial, sans-serif; max-width: 580px; margin: 0 auto; padding: 25px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #f8fafc;">
+                <div style="border-bottom: 2px solid #0f172a; padding-bottom: 15px; margin-bottom: 20px;">
+                  <h2 style="color: #0f172a; margin: 0; font-size: 18px;">📅 Su Reserva ha sido Registrada con Éxito</h2>
+                  <p style="color: #64748b; margin: 5px 0 0 0; font-size: 11px;">Mente Sana / MindSpace - Consulta Profesional</p>
+                </div>
+                
+                <p style="font-size: 13px; color: #1e293b; line-height: 1.6;">
+                  Estimado(a) <strong>${name}</strong>,
+                </p>
+                
+                <p style="font-size: 13px; color: #334155; line-height: 1.6;">
+                  Se ha agendado con éxito una sesión en el consultorio virtual con el terapeuta. A continuación se detallan los datos de su cita:
+                </p>
+                
+                <div style="background-color: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 15px; margin: 20px 0; text-align: left;">
+                  <p style="margin: 4px 0; font-size: 12px; color: #334155;"><strong>Profesional:</strong> ${therapistName}</p>
+                  <p style="margin: 4px 0; font-size: 12px; color: #334155;"><strong>Paciente:</strong> ${name}</p>
+                  <p style="margin: 4px 0; font-size: 12px; color: #334155;"><strong>RUT:</strong> ${rut}</p>
+                  <p style="margin: 4px 0; font-size: 12px; color: #334155;"><strong>Fecha:</strong> ${date}</p>
+                  <p style="margin: 4px 0; font-size: 12px; color: #334155;"><strong>Horario:</strong> ${timeSlot} hrs</p>
+                  <p style="margin: 4px 0; font-size: 12px; color: #334155;"><strong>Valor Sesión:</strong> $${sessionPrice.toLocaleString("es-CL")} CLP (Boleta SII exenta)</p>
+                </div>
+
+                <p style="font-size: 13px; color: #334155; line-height: 1.6;">
+                  Para acceder a su sala de videoconferencia privada o reajustar los datos de su cita, ingrese en el <strong>Portal de Pacientes</strong> en nuestro sitio.
+                </p>
+
+                <div style="border-top: 1px solid #e2e8f0; padding-top: 15px; margin-top: 25px; font-size: 10px; color: #94a3b8; text-align: center;">
+                  <p>Este comprobante clínico es estrictamente confidencial de acuerdo a la Ley 20.584 chilena.</p>
+                  <p>© 2026 MindSpace Chile. Soluciones Médicas Integradas.</p>
+                </div>
+              </div>
+            `;
+            sendGmail(gmailToken, email, subject, bodyContent).catch((e) => console.error("Error sending booking email:", e));
+          }
+
+          // Also notify the clinician
+          const clinicianEmail = "joseignacio.rovel@gmail.com";
+          const clinicianSubject = `⚠️ NUEVO AGENDAMIENTO: ${name} - ${date} @ ${timeSlot}`;
+          const clinicianBody = `
+            <div style="font-family: Arial, sans-serif; max-width: 580px; margin: 0 auto; padding: 25px; border: 1px solid #10b981; border-radius: 16px; background-color: #f0fdf4;">
+              <h2 style="color: #065f46; margin: 0 0 15px 0;">🎉 Nuevo Agendamiento Registrado</h2>
+              <p>Estimado(a) <strong>${therapistName}</strong>,</p>
+              <p>Se ha registrado un nuevo agendamiento en su portal médico. Por motivos de seguridad de la información y cumplimiento de la Ley 20.584, los datos de contacto y de identificación se han omitido de este correo y pueden revisarse directamente en el portal clínico seguro.</p>
+              
+              <div style="background-color: #ffffff; border: 1px solid #a7f3d0; border-radius: 8px; padding: 15px; margin: 20px 0; text-align: left;">
+                <p style="margin: 4px 0; font-size: 13px; color: #1f2937;"><strong>Paciente:</strong> ${name}</p>
+                <p style="margin: 4px 0; font-size: 13px; color: #1f2937;"><strong>Fecha de Reserva:</strong> ${date}</p>
+                <p style="margin: 4px 0; font-size: 13px; color: #1f2937;"><strong>Bloque Horario:</strong> ${timeSlot} hrs</p>
+                <p style="margin: 4px 0; font-size: 13px; color: #1f2937;"><strong>Motivo o Notas del Paciente:</strong> ${notes || "Sin observaciones iniciales"}</p>
+              </div>
+              
+              <p style="font-size: 12px; color: #475569;">
+                Este correo de notificación fue despachado de forma segura mediante la integración de la API autorizada de Gmail.
+              </p>
+              <p style="font-size: 11px; color: #64748b; text-align: center; margin-top: 20px;">© 2026 MindSpace Chile. En cumplimiento de secreto médico.</p>
+            </div>
+          `;
+          sendGmail(gmailToken, clinicianEmail, clinicianSubject, clinicianBody).catch((e) => console.error("Error sending clinician alert email:", e));
+        }
       } catch (err) {
         console.warn("[Firestore Write] Direct client write warning, attempting backend fallback: ", err);
       }

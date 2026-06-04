@@ -19,6 +19,8 @@ import {
   FileText, 
   Loader2,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
   MessageSquare,
   RefreshCw,
   Award
@@ -27,6 +29,7 @@ import { collection, query, where, getDocs, updateDoc, doc, Timestamp, onSnapsho
 import { db, handleFirestoreError, OperationType } from "../firebase";
 import { Appointment, ClinicSettings } from "../types";
 import { motion, AnimatePresence } from "motion/react";
+import { getCachedAccessToken, sendGmail } from "../utils/googleAuth";
 
 // Web Speech API interfaces
 const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -41,6 +44,7 @@ interface AbbyAssistantProps {
 export default function AbbyAssistant({ mode, therapistUid, therapistName, settings }: AbbyAssistantProps) {
   // Voice & Interaction settings
   const [speechEnabled, setSpeechEnabled] = useState(true);
+  const [isFaqOpen, setIsFaqOpen] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [handsFreeMode, setHandsFreeMode] = useState(false);
@@ -323,35 +327,84 @@ export default function AbbyAssistant({ mode, therapistUid, therapistName, setti
     setIsProcessingSuspension(true);
     setWizardStep("notifying");
 
+    const gmailToken = getCachedAccessToken();
+
     try {
       // Simulate gradual message broadcasting
       await new Promise((resolve) => setTimeout(resolve, 2000));
 
-      // Loop through all today's appointments to set as "canceled" in Firebase
-      for (const appt of todayAppointments) {
-        const docRef = doc(db, "appointments", appt.id);
-        await updateDoc(docRef, {
-          status: "canceled",
-          notes: `Sesión suspendida de emergencia el ${new Date().toLocaleDateString()} debido a imprevisto familiar clínico. Abby generó alternativas de reagendamiento.`
-        });
-      }
-
-      // Generate simulated reschedule proposals
+      // Generate reschedule proposals
       const days = ["Miércoles 27 de Mayo", "Jueves 28 de Mayo", "Viernes 29 de Mayo"];
       const proposedSlots = todayAppointments.map((appt, i) => ({
         id: appt.id,
         patientName: appt.patientName,
+        patientEmail: appt.patientEmail,
         originalSlot: appt.timeSlot,
+        originalDate: appt.date,
         proposedDate: days[i % days.length],
         proposedSlot: appt.timeSlot,
-        medium: (i % 2 === 0 ? "WhatsApp" : "Email") as "WhatsApp" | "Email"
+        medium: "Email" as "WhatsApp" | "Email"
       }));
+
+      // Loop through all today's appointments to set as "canceled" in Firebase and dispatch genuine emails
+      for (const res of proposedSlots) {
+        const docRef = doc(db, "appointments", res.id);
+        await updateDoc(docRef, {
+          status: "canceled",
+          notes: `Sesión suspendida de emergencia el ${new Date().toLocaleDateString()} debido a imprevisto familiar clínico. Abby generó alternativa: ${res.proposedDate} @ ${res.proposedSlot} hrs.`
+        });
+
+        // Use clinician's connected Gmail API to notify each affected patient!
+        if (gmailToken && res.patientEmail) {
+          const subject = `AVISO: Reprogramación de consulta psicológica urgente - MindSpace Clinica`;
+          const bodyContent = `
+            <div style="font-family: Arial, sans-serif; max-width: 580px; margin: 0 auto; padding: 25px; border: 1px solid #fee2e2; border-radius: 16px; background-color: #fef2f2;">
+              <div style="border-bottom: 2px solid #b91c1c; padding-bottom: 15px; margin-bottom: 20px;">
+                <h2 style="color: #991b1b; margin: 0; font-size: 18px;">⚠️ Aviso de Suspensión de Agenda Clínica</h2>
+                <p style="color: #7f1d1d; margin: 5px 0 0 0; font-size: 11px;">Mente Sana / MindSpace - Asistencia de Abby Admin AI</p>
+              </div>
+              
+              <p style="font-size: 13px; color: #1f2937; line-height: 1.6;">
+                Estimado(a) <strong>${res.patientName}</strong>,
+              </p>
+              
+              <p style="font-size: 13px; color: #374151; line-height: 1.6;">
+                Le informamos que por un imprevisto de fuerza mayor de carácter urgente, su terapeuta ha debido suspender temporalmente su agenda para hoy.
+              </p>
+              
+              <div style="background-color: #ffffff; border: 1px solid #fecaca; border-radius: 8px; padding: 15px; margin: 20px 0; text-align: center;">
+                <span style="font-size: 11px; color: #7f1d1d; text-transform: uppercase; font-weight: bold; display: block; margin-bottom: 4px;">Turno Afectado</span>
+                <strong style="font-size: 15px; color: #991b1b; display: block;">${res.originalDate} a las ${res.originalSlot} hrs</strong>
+              </div>
+
+              <p style="font-size: 13px; color: #374151; line-height: 1.6;">
+                Para velar por su continuidad clínica, Abby le ha reservado automáticamente la siguiente alternativa preferente de reprogramación sin costo adicional:
+              </p>
+
+              <div style="background-color: #e0f2fe; border: 1px solid #bae6fd; border-radius: 8px; padding: 15px; margin: 20px 0; text-align: center;">
+                <span style="font-size: 11px; color: #0369a1; text-transform: uppercase; font-weight: bold; display: block; margin-bottom: 4px;">Nueva Alternativa Propuesta</span>
+                <strong style="font-size: 15px; color: #0369a1; display: block;">${res.proposedDate} a las ${res.proposedSlot} hrs</strong>
+              </div>
+
+              <p style="font-size: 12px; color: #4b5563;">
+                Para confirmar o modificar esta cita, por favor acceda a su <strong>Portal del Paciente</strong> a la brevedad.
+              </p>
+
+              <div style="border-top: 1px solid #fca5a5; padding-top: 15px; margin-top: 25px; font-size: 10px; color: #9ca3af; text-align: center;">
+                <p>Este informe clínico confidencial ha sido despachado automáticamente en tiempo real por Abby Admin AI.</p>
+                <p>© 2026 MindSpace Chile. Ley 20.584 de Derechos y Deberes del Paciente.</p>
+              </div>
+            </div>
+          `;
+          sendGmail(gmailToken, res.patientEmail, subject, bodyContent).catch((e) => console.error("Error dispatching suspension email via Abby:", e));
+        }
+      }
 
       setRescheduleData(proposedSlots);
       setWizardStep("completed");
 
       // Give Abby a conversational summary
-      const summaryMsg = `¡Hecho, Doctor Romero! Citas de hoy canceladas con éxito en el sistema. He notificado automáticamente a los pacientes (${todayAppointments.map(a => a.patientName).join(", ")}) indicándoles que tuvo que salir de urgencia médica. Les envié opciones de reprogramación en el mismo bloque para los próximos días. Todo el flujo clínico está seguro y bajo control. Vaya tranquilo y espero todo resulte bien con su eventualidad de salud familiar.`;
+      const summaryMsg = `¡Hecho, Doctor Ignacio! Citas de hoy canceladas con éxito en el sistema. He notificado y despachado automáticamente un correo confidencial a cada paciente (${todayAppointments.map(a => a.patientName).join(", ")}) indicándoles que tuvo un imprevisto, entregándoles sus respectivas opciones de reprogramación en su mismo bloque para los próximos días. El flujo clínico está seguro y bajo control. Vaya tranquilo y espero todo resulte excelente con su eventualidad.`;
       
       setChatLog(prev => [
         ...prev,
@@ -1068,24 +1121,25 @@ export default function AbbyAssistant({ mode, therapistUid, therapistName, setti
               className="flex-1 px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 text-xs text-slate-800 dark:text-slate-100 font-semibold focus:border-slate-400 placeholder:text-gray-400"
             />
 
-            {/* Micro voice record trigger toggle button */}
+            {/* Micro voice record trigger toggle button (WhatsApp dictation styling) */}
             <button
               onClick={toggleListening}
-              className={`p-2.5 rounded-xl transition cursor-pointer flex items-center justify-center text-white relative ${
+              className={`p-2.5 rounded-xl transition cursor-pointer flex items-center justify-center relative ${
                 isListening 
-                  ? "bg-red-500 animate-pulse ring-4 ring-red-500/25" 
-                  : "bg-slate-900 hover:bg-slate-800 text-slate-100 dark:bg-white dark:text-slate-950"
+                  ? "bg-rose-500 text-white animate-pulse ring-4 ring-rose-500/25 scale-105" 
+                  : "bg-emerald-500 dark:bg-emerald-600 hover:bg-emerald-600 dark:hover:bg-emerald-500 text-slate-950"
               }`}
-              title="Presione para hablarle a Abby (Reconocimiento Clínico)"
+              title="Dictar mensaje por voz"
             >
               {isListening ? (
-                <>
-                  <MicOff className="w-4 h-4 animate-bounce" />
-                  <span className="absolute -top-1.5 -right-1 flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
-                  </span>
-                </>
+                <div className="flex items-center gap-1.5">
+                  <MicOff className="w-4 h-4 text-white" />
+                  <div className="flex items-end gap-0.5 h-3 px-0.5">
+                    <span className="w-0.5 h-1.5 bg-white rounded-xs animate-bounce" style={{ animationDelay: '0ms', animationDuration: '600ms' }}></span>
+                    <span className="w-0.5 h-3 bg-white rounded-xs animate-bounce" style={{ animationDelay: '150ms', animationDuration: '600ms' }}></span>
+                    <span className="w-0.5 h-2 bg-white rounded-xs animate-bounce" style={{ animationDelay: '300ms', animationDuration: '600ms' }}></span>
+                  </div>
+                </div>
               ) : (
                 <Mic className="w-4 h-4" />
               )}
@@ -1095,7 +1149,7 @@ export default function AbbyAssistant({ mode, therapistUid, therapistName, setti
             <button
               onClick={() => handleSendMessage()}
               disabled={!inputText.trim()}
-              className="p-2.5 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 font-bold rounded-xl transition flex items-center justify-center cursor-pointer"
+              className="p-2.5 bg-slate-900 hover:bg-slate-950 text-white dark:bg-white dark:hover:bg-slate-50 dark:text-slate-950 font-bold rounded-xl transition flex items-center justify-center cursor-pointer"
             >
               <Send className="w-4 h-4" />
             </button>
@@ -1201,44 +1255,87 @@ export default function AbbyAssistant({ mode, therapistUid, therapistName, setti
                     setIsWidgetOpen(false);
                   }
                 }}
-                className="w-full bg-slate-900 hover:bg-slate-950 border border-emerald-500 text-white font-extrabold text-[11px] p-2.5 rounded-xl transition flex items-center justify-center gap-1.5 shadow-md uppercase tracking-wider text-center cursor-pointer"
+                className="w-full bg-slate-900 hover:bg-slate-950 border border-emerald-500 text-white font-extrabold text-[11px] p-2.5 rounded-xl transition flex items-center justify-center gap-1.5 shadow-md uppercase tracking-wider text-center cursor-pointer mb-1"
               >
                 <Calendar className="w-4 h-4 text-emerald-400" /> Agendar Hora Médica 📅
               </button>
 
-              <span className="text-[8.5px] font-extrabold text-gray-400 block font-mono uppercase text-left">Preguntas frecuentes sugeridas:</span>
-              
-              <div className="grid grid-cols-2 gap-1.5">
+              {/* Pocket Collapsible FAQ Drawer ("Bolsillo expansible") */}
+              <div className="bg-slate-50 dark:bg-slate-950/40 p-2.5 rounded-xl border border-gray-100 dark:border-slate-850">
                 <button
-                  onClick={() => handlePatientFAQ("how_to_book")}
-                  className="p-1 px-2.5 border border-gray-150 dark:border-slate-800 bg-slate-50 hover:bg-slate-100 dark:bg-slate-950 rounded-xl text-[10px] text-left font-bold text-slate-700 dark:text-slate-300 transition shrink-0 cursor-pointer"
+                  type="button"
+                  onClick={() => setIsFaqOpen(!isFaqOpen)}
+                  className="w-full flex items-center justify-between text-[10px] font-extrabold text-slate-500 hover:text-emerald-500 dark:text-slate-400 dark:hover:text-emerald-400 transition cursor-pointer select-none uppercase tracking-wide"
                 >
-                  ¿Cómo agendar hora?
+                  <span className="flex items-center gap-1">
+                    💡 Preguntas Frecuentes
+                  </span>
+                  <div className="flex items-center gap-1 text-[9px] font-bold text-gray-400 lowercase animate-pulse">
+                    <span>{isFaqOpen ? "ocultar" : "ver de un vistazo"}</span>
+                    {isFaqOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                  </div>
                 </button>
 
-                <button
-                  onClick={() => handlePatientFAQ("pricing")}
-                  className="p-1 px-2.5 border border-gray-150 dark:border-slate-800 bg-slate-50 hover:bg-slate-100 dark:bg-slate-950 rounded-xl text-[10px] text-left font-bold text-slate-700 dark:text-slate-300 transition shrink-0 cursor-pointer"
-                >
-                  ¿Aranceles de consulta?
-                </button>
+                <AnimatePresence initial={false}>
+                  {isFaqOpen && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0, marginTop: 0 }}
+                      animate={{ height: "auto", opacity: 1, marginTop: 8 }}
+                      exit={{ height: 0, opacity: 0, marginTop: 0 }}
+                      transition={{ duration: 0.2, ease: "easeInOut" }}
+                      className="overflow-hidden"
+                    >
+                      <div className="grid grid-cols-2 gap-1.5 pt-1.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handlePatientFAQ("how_to_book");
+                            setIsFaqOpen(false);
+                          }}
+                          className="p-1 px-2.5 border border-gray-150 dark:border-slate-800 bg-white hover:bg-slate-100 dark:bg-slate-950 rounded-xl text-[10px] text-left font-bold text-slate-700 dark:text-slate-300 transition shrink-0 cursor-pointer shadow-xs"
+                        >
+                          ¿Cómo agendar hora?
+                        </button>
 
-                <button
-                  onClick={() => handlePatientFAQ("privacy")}
-                  className="p-1 px-2.5 border border-gray-150 dark:border-slate-800 bg-slate-50 hover:bg-slate-100 dark:bg-slate-950 rounded-xl text-[10px] text-left font-bold text-slate-700 dark:text-slate-300 transition shrink-0 cursor-pointer"
-                >
-                  Privacidad Ley 19.628
-                </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handlePatientFAQ("pricing");
+                            setIsFaqOpen(false);
+                          }}
+                          className="p-1 px-2.5 border border-gray-150 dark:border-slate-800 bg-white hover:bg-slate-100 dark:bg-slate-950 rounded-xl text-[10px] text-left font-bold text-slate-700 dark:text-slate-300 transition shrink-0 cursor-pointer shadow-xs"
+                        >
+                          ¿Aranceles de consulta?
+                        </button>
 
-                <button
-                  onClick={() => handlePatientFAQ("video_call")}
-                  className="p-1 px-2.5 border border-gray-150 dark:border-slate-800 bg-slate-50 hover:bg-slate-100 dark:bg-slate-950 rounded-xl text-[10px] text-left font-bold text-slate-700 dark:text-slate-300 transition shrink-0 cursor-pointer"
-                >
-                  ¿Cómo es la videollamada?
-                </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handlePatientFAQ("privacy");
+                            setIsFaqOpen(false);
+                          }}
+                          className="p-1 px-2.5 border border-gray-150 dark:border-slate-800 bg-white hover:bg-slate-100 dark:bg-slate-950 rounded-xl text-[10px] text-left font-bold text-slate-700 dark:text-slate-300 transition shrink-0 cursor-pointer shadow-xs"
+                        >
+                          Privacidad Ley 19.628
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handlePatientFAQ("video_call");
+                            setIsFaqOpen(false);
+                          }}
+                          className="p-1 px-2.5 border border-gray-150 dark:border-slate-800 bg-white hover:bg-slate-100 dark:bg-slate-950 rounded-xl text-[10px] text-left font-bold text-slate-700 dark:text-slate-300 transition shrink-0 cursor-pointer shadow-xs"
+                        >
+                          ¿Cómo es la videollamada?
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
 
-              {/* Chat Input & Mic */}
+              {/* Chat Input & Mic (WhatsApp Voice dictation style) */}
               <div className="flex gap-2 items-center border-t border-slate-100 dark:border-slate-850 pt-2.5">
                 <input
                   type="text"
@@ -1248,13 +1345,39 @@ export default function AbbyAssistant({ mode, therapistUid, therapistName, setti
                   onKeyDown={(e) => {
                     if (e.key === "Enter") handleSendMessage();
                   }}
-                  className="flex-1 px-3 py-1.5 border border-slate-200 dark:border-slate-800 rounded-xl text-[10.5px] bg-slate-50/50 dark:bg-slate-950 placeholder:text-gray-400 text-slate-800 dark:text-slate-200"
+                  className="flex-1 px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl text-[10.5px] bg-slate-50/50 dark:bg-slate-950 placeholder:text-gray-400 text-slate-800 dark:text-slate-200 font-semibold"
                 />
 
+                {/* WhatsApp-style patient voice dictation button */}
                 <button
+                  type="button"
+                  onClick={toggleListening}
+                  className={`p-2 rounded-xl transition cursor-pointer flex items-center justify-center shrink-0 relative ${
+                    isListening 
+                      ? "bg-rose-500 text-white animate-pulse ring-4 ring-rose-500/25 scale-105" 
+                      : "bg-emerald-500 hover:bg-emerald-600 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-slate-950"
+                  }`}
+                  title="Presione para dictar por voz"
+                >
+                  {isListening ? (
+                    <div className="flex items-center gap-1 px-0.5">
+                      <MicOff className="w-3.5 h-3.5 text-white animate-bounce" />
+                      <div className="flex items-end gap-0.5 h-3">
+                        <span className="w-0.5 h-1.5 bg-white rounded-xs animate-bounce" style={{ animationDelay: '0ms', animationDuration: '600ms' }}></span>
+                        <span className="w-0.5 h-3 bg-white rounded-xs animate-bounce" style={{ animationDelay: '150ms', animationDuration: '600ms' }}></span>
+                        <span className="w-0.5 h-2 bg-white rounded-xs animate-bounce" style={{ animationDelay: '300ms', animationDuration: '600ms' }}></span>
+                      </div>
+                    </div>
+                  ) : (
+                    <Mic className="w-3.5 h-3.5" />
+                  )}
+                </button>
+
+                <button
+                  type="button"
                   onClick={() => handleSendMessage()}
                   disabled={!inputText.trim()}
-                  className="p-2 bg-emerald-500 text-slate-950 rounded-xl shrink-0 hover:bg-emerald-400 disabled:opacity-50 transition cursor-pointer"
+                  className="p-2 bg-slate-900 border border-slate-900 hover:bg-slate-950 dark:bg-white dark:border-white dark:hover:bg-slate-55 text-white dark:text-slate-950 rounded-xl shrink-0 transition flex items-center justify-center cursor-pointer"
                 >
                   <Send className="w-3.5 h-3.5" />
                 </button>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { onAuthStateChanged, signInWithPopup, signOut, User } from "firebase/auth";
+import { onAuthStateChanged, signInWithPopup, signOut, User, GoogleAuthProvider } from "firebase/auth";
 import { collection, query, where, orderBy, onSnapshot, doc } from "firebase/firestore";
 import { auth, googleProvider, db } from "./firebase";
 import BookingCalendar from "./components/BookingCalendar";
@@ -18,6 +18,7 @@ import { TermsOfServiceModal, PrivacyPolicyModal } from "./components/LegalModal
 import { soundFX } from "./utils/soundFX";
 import { motion, AnimatePresence } from "motion/react";
 import { Calendar, BookOpen, CreditCard, LogIn, LogOut, Video, Heart, Globe, Settings, Lock, Sparkles, MessageSquare, ShieldCheck, Clipboard, Star, Share2, ChevronLeft, ChevronRight, Sun, Moon, Phone, Smile, ShieldAlert, Activity, Clock, ChevronDown, Volume2, VolumeX } from "lucide-react";
+import { setCachedAccessToken } from "./utils/googleAuth";
 
 const formatReviewDate = (createdAt: any) => {
   if (!createdAt) return "Reciente";
@@ -227,7 +228,17 @@ export default function App() {
 
   const handleLoginGoogle = async () => {
     try {
-      await signInWithPopup(auth, googleProvider);
+      // Configure scopes for Gmail sending support
+      googleProvider.addScope("https://www.googleapis.com/auth/gmail.send");
+      
+      const result = await signInWithPopup(auth, googleProvider);
+      const credential = GoogleAuthProvider.credentialFromResult(result);
+      if (credential?.accessToken) {
+        setCachedAccessToken(credential.accessToken);
+        console.log("[Google Auth]: Token retrieved and cached successfully.");
+      } else {
+        console.warn("[Google Auth]: No access token returned in the credential payload.");
+      }
     } catch (err: any) {
       console.error("Specialist Google Authentication error:", err);
       alert("Hubo un problema al ingresar con Google. Por favor, intente de nuevo.");
@@ -237,6 +248,7 @@ export default function App() {
   const handleLogout = async () => {
     try {
       await signOut(auth);
+      setCachedAccessToken(null);
       setPortalMode("public");
     } catch (err) {
       console.error("Signout error:", err);

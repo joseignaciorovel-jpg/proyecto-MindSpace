@@ -2,7 +2,8 @@ import React, { useState, useEffect } from "react";
 import { collection, query, where, onSnapshot } from "firebase/firestore";
 import { db, handleFirestoreError, OperationType } from "../firebase";
 import { Appointment } from "../types";
-import { Wallet, Landmark, TrendingUp, Receipt, ChevronRight, CheckCircle, Clock, ExternalLink } from "lucide-react";
+import { Wallet, Landmark, TrendingUp, Receipt, ChevronRight, CheckCircle, Clock, ExternalLink, Mail, Loader2, AlertCircle } from "lucide-react";
+import { getCachedAccessToken, requestGoogleAuthToken, sendGmail } from "../utils/googleAuth";
 
 interface PaymentsLedgerProps {
   therapistUid: string;
@@ -11,6 +12,18 @@ interface PaymentsLedgerProps {
 export default function PaymentsLedger({ therapistUid }: PaymentsLedgerProps) {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [reviewsCount, setReviewsCount] = useState(0);
+  
+  // Gmail integration states
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
+  const [emailSuccess, setEmailSuccess] = useState(false);
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [gmailToken, setGmailToken] = useState<string | null>(getCachedAccessToken());
+
+  useEffect(() => {
+    // Keep internal token state in sync with cache
+    setGmailToken(getCachedAccessToken());
+  }, []);
 
   useEffect(() => {
     if (!therapistUid) return;
@@ -32,6 +45,20 @@ export default function PaymentsLedger({ therapistUid }: PaymentsLedgerProps) {
     });
 
     return () => unsubscribe();
+  }, [therapistUid]);
+
+  useEffect(() => {
+    if (!therapistUid) return;
+    const qReviews = query(
+      collection(db, "reviews"),
+      where("ownerId", "==", therapistUid)
+    );
+    const unsubscribeReviews = onSnapshot(qReviews, (snap) => {
+      setReviewsCount(snap.size);
+    }, (error) => {
+      console.warn("Could not query reviews snapshot for ledger summary:", error);
+    });
+    return () => unsubscribeReviews();
   }, [therapistUid]);
 
   // Aggregate statistics
@@ -81,8 +108,167 @@ export default function PaymentsLedger({ therapistUid }: PaymentsLedgerProps) {
     );
   };
 
+  const handleSendGmailReport = async () => {
+    if (!gmailToken) return;
+    setIsSendingEmail(true);
+    setEmailSuccess(false);
+    setEmailError(null);
+
+    const bruto = totalRevenue;
+    const retencion = Math.round(bruto * 0.145);
+    const liquido = bruto - retencion;
+
+    // Filter appointments that are paid
+    const paidAppts = appointments.filter((a) => a.paymentStatus === "paid" && a.status !== "canceled");
+    const totalConsultasPeriodo = paidAppts.length;
+
+    const htmlBody = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 25px; border: 1px solid #e5e7eb; border-radius: 16px; background-color: #fafafa;">
+        <div style="border-bottom: 2px solid #0f172a; padding-bottom: 15px; margin-bottom: 20px;">
+          <h2 style="color: #0f172a; margin: 0; font-size: 20px;">Reporte de Facturación Mensual</h2>
+          <p style="color: #6b7280; margin: 5px 0 0 0; font-size: 11px;">Mente Sana / MindSpace - Chile 2026</p>
+        </div>
+        
+        <div style="margin-bottom: 20px; font-size: 13px; line-height: 1.6; color: #374151;">
+          <p>Estimado(a) <strong>Especialista Clínico</strong>,</p>
+          <p>Detallamos el informe consolidado numérico de su actividad clínica. Este reporte ha sido configurado bajo los máximos estándares de secreto facultativo según la Ley 20.584, por ende se ha omitido todo desglose identificatorio de pacientes por motivos de seguridad informática y resguardo visual.</p>
+        </div>
+        
+        <!-- Resumen Financiero Grid -->
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 25px; text-align: center;">
+          <tr>
+            <td style="width: 33.33%; padding: 4px;">
+              <div style="background-color: #ffffff; padding: 12px; border: 1px solid #e5e7eb; border-radius: 8px;">
+                <span style="font-size: 10px; color: #6b7280; display: block; text-transform: uppercase;">Total Bruto</span>
+                <span style="font-size: 14px; font-weight: bold; color: #111827; display: block; margin-top: 4px;">$${bruto.toLocaleString("es-CL")} CLP</span>
+              </div>
+            </td>
+            <td style="width: 33.33%; padding: 4px;">
+              <div style="background-color: #ffffff; padding: 12px; border: 1px solid #e5e7eb; border-radius: 8px;">
+                <span style="font-size: 10px; color: #d97706; display: block; text-transform: uppercase;">Retención (14.5%)</span>
+                <span style="font-size: 14px; font-weight: bold; color: #b45309; display: block; margin-top: 4px;">- $${retencion.toLocaleString("es-CL")} CLP</span>
+              </div>
+            </td>
+            <td style="width: 33.33%; padding: 4px;">
+              <div style="background-color: #ffffff; padding: 12px; border: 1px solid #e5e7eb; border-radius: 8px;">
+                <span style="font-size: 10px; color: #059669; display: block; text-transform: uppercase;">Ingreso Líquido</span>
+                <span style="font-size: 14px; font-weight: bold; color: #047857; display: block; margin-top: 4px;">$${liquido.toLocaleString("es-CL")} CLP</span>
+              </div>
+            </td>
+          </tr>
+        </table>
+        
+        <!-- Resumen de Métricas de Actividad -->
+        <h4 style="font-size: 12px; color: #374151; border-bottom: 1px solid #e5e7eb; padding-bottom: 6px; margin: 25px 0 10px 0; text-transform: uppercase; letter-spacing: 0.5px;">Resumen Consolidado de Actividad</h4>
+        <table style="width: 100%; border-collapse: collapse; font-size: 12px; color: #4b5563; margin-top: 10px;">
+          <tbody>
+            <tr style="border-bottom: 1px solid #f3f4f6;">
+              <td style="padding: 10px 4px; color: #374151; font-weight: bold;">Atenciones Totales Liquidadas:</td>
+              <td style="padding: 10px 4px; font-weight: bold; color: #0f172a; text-align: right; font-size: 14px;">${totalConsultasPeriodo} consultas</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #f3f4f6;">
+              <td style="padding: 10px 4px; color: #374151; font-weight: bold;">Promedio de Valor por Cita:</td>
+              <td style="padding: 10px 4px; font-weight: bold; color: #0f172a; text-align: right; font-size: 14px;">$${(totalConsultasPeriodo ? Math.round(bruto / totalConsultasPeriodo) : 45000).toLocaleString("es-CL")} CLP</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #f3f4f6;">
+              <td style="padding: 10px 4px; color: #374151; font-weight: bold;">Testimonios y Evaluaciones Recibidos:</td>
+              <td style="padding: 10px 4px; font-weight: bold; color: #0369a1; text-align: right; font-size: 14px;">${reviewsCount} valoraciones</td>
+            </tr>
+          </tbody>
+        </table>
+        
+        <div style="border-top: 1px solid #e5e7eb; padding-top: 15px; margin-top: 30px; font-size: 10px; color: #9ca3af; text-align: center;">
+          <p>Este informe libre de datos personales fue autogenerado y despachado de forma segura mediante la integración de la API autorizada de Gmail.</p>
+          <p>© 2026 MindSpace Chile. En cumplimiento de secreto médico y Ley 20.584.</p>
+        </div>
+      </div>
+    `;
+
+    // Recipient address
+    const recipient = "joseignacio.rovel@gmail.com";
+    const subject = `Resumen Mensual de Facturación Seguro - ${new Date().toLocaleDateString("es-CL", { month: "long" })} 2026`;
+    
+    try {
+      const success = await sendGmail(gmailToken, recipient, subject, htmlBody);
+      if (success) {
+        setEmailSuccess(true);
+        setTimeout(() => setEmailSuccess(false), 5000);
+      } else {
+        setEmailError("La Gmail API rechazó el envío. Intente reconectar su cuenta de Google.");
+      }
+    } catch (err: any) {
+      setEmailError(err.message || "Error al procesar el envío.");
+    } finally {
+      setIsSendingEmail(false);
+    }
+  };
+
+  const handleConnectGmail = async () => {
+    try {
+      const token = await requestGoogleAuthToken();
+      if (token) {
+        setGmailToken(token);
+      }
+    } catch (e: any) {
+      console.error(e);
+    }
+  };
+
   return (
     <div className="space-y-6">
+      
+      {/* Dynamic Header Block with Gmail Reporting Actions */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-100/50 dark:border-slate-800/50 pb-4">
+        <div>
+          <h3 className="text-lg font-bold text-slate-900 dark:text-white">Finanzas y Libro de Cobros</h3>
+          <p className="text-xs text-slate-500 dark:text-slate-400">Conciliación tributaria de Boletas de Honorarios SII y reportería de ingresos.</p>
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          {gmailToken ? (
+            <div className="flex items-center gap-2">
+              {emailSuccess && (
+                <span className="text-[11px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/50 px-2.5 py-1.5 rounded-xl animate-in fade-in duration-300">
+                  ¡Reporte enviado exitosamente! ✓
+                </span>
+              )}
+              {emailError && (
+                <span className="text-[11px] font-bold text-rose-600 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 px-2.5 py-1.5 rounded-xl animate-in fade-in duration-300">
+                  {emailError}
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={handleSendGmailReport}
+                disabled={isSendingEmail}
+                className="bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-950 border border-slate-205 py-2 px-4 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer disabled:opacity-50"
+              >
+                {isSendingEmail ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    Enviando Reporte...
+                  </>
+                ) : (
+                  <>
+                    <Mail className="w-3.5 h-3.5 text-emerald-450" />
+                    Enviar Reporte Mensual por Gmail 📨
+                  </>
+                )}
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={handleConnectGmail}
+              className="bg-slate-50 hover:bg-slate-100 dark:bg-slate-900 dark:hover:bg-slate-805 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-800 py-2 px-4 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer animate-pulse"
+              title="Autoriza acceso seguro de Gmail para enviar reportes automáticos"
+            >
+              <Mail className="w-3.5 h-3.5 text-blue-500" />
+              Conectar Gmail para Reportes Automáticos
+            </button>
+          )}
+        </div>
+      </div>
       
       {/* 1. Statistics Bento Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 font-sans">

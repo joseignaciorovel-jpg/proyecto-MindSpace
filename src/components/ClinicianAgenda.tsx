@@ -7,6 +7,7 @@ import {
   ChevronLeft, ChevronRight, Smartphone, Bell, Mail, Layers, Settings, CalendarDays, Check, RefreshCw,
   Edit, FileText
 } from "lucide-react";
+import { getCachedAccessToken, sendGmail } from "../utils/googleAuth";
 
 interface ClinicianAgendaProps {
   therapistUid: string;
@@ -436,6 +437,7 @@ export default function ClinicianAgenda({ therapistUid, onJoinCall }: ClinicianA
       return suspSelectedSlots.includes(appt.timeSlot);
     });
 
+    const gmailToken = getCachedAccessToken();
     const pendingProposals: any[] = [];
     const dispatchTrace: string[] = [];
 
@@ -466,10 +468,55 @@ export default function ClinicianAgenda({ therapistUid, onJoinCall }: ClinicianA
         processed: false
       });
 
+      // Send clinical emergency suspension email via Gmail if clinician is integrated!
+      if (gmailToken && appt.patientEmail) {
+        const subject = `AVISO: Reprogramación de consulta psicológica urgente - MindSpace Clinica`;
+        const bodyContent = `
+          <div style="font-family: Arial, sans-serif; max-width: 580px; margin: 0 auto; padding: 25px; border: 1px solid #fee2e2; border-radius: 16px; background-color: #fef2f2;">
+            <div style="border-bottom: 2px solid #b91c1c; padding-bottom: 15px; margin-bottom: 20px;">
+              <h2 style="color: #991b1b; margin: 0; font-size: 18px;">⚠️ Aviso de Suspensión de Agenda Clínica</h2>
+              <p style="color: #7f1d1d; margin: 5px 0 0 0; font-size: 11px;">Mente Sana / MindSpace - Consulta Médica</p>
+            </div>
+            
+            <p style="font-size: 13px; color: #1f2937; line-height: 1.6;">
+              Estimado(a) <strong>${appt.patientName}</strong>,
+            </p>
+            
+            <p style="font-size: 13px; color: #374151; line-height: 1.6;">
+              Le informamos que por motivos de fuerza mayor de carácter de emergencia médica o personal, el analista o especialista clínico ha debido suspender temporalmente su agenda para la próxima fecha:
+            </p>
+            
+            <div style="background-color: #ffffff; border: 1px solid #fecaca; border-radius: 8px; padding: 15px; margin: 20px 0; text-align: center;">
+              <span style="font-size: 11px; color: #7f1d1d; text-transform: uppercase; font-weight: bold; display: block; margin-bottom: 4px;">Turno Afectado</span>
+              <strong style="font-size: 15px; color: #991b1b; display: block;">${appt.date} a las ${appt.timeSlot} hrs</strong>
+            </div>
+
+            <p style="font-size: 13px; color: #374151; line-height: 1.6;">
+              Para velar por su continuidad clínica de inmediato, se le ha propuesto la siguiente alternativa de reagendamiento automático sin costo alguno:
+            </p>
+
+            <div style="background-color: #e0f2fe; border: 1px solid #bae6fd; border-radius: 8px; padding: 15px; margin: 20px 0; text-align: center;">
+              <span style="font-size: 11px; color: #0369a1; text-transform: uppercase; font-weight: bold; display: block; margin-bottom: 4px;">Nueva Alternativa Reagendada</span>
+              <strong style="font-size: 15px; color: #0369a1; display: block;">${nextProposed.date} a las ${nextProposed.slot} hrs</strong>
+            </div>
+
+            <p style="font-size: 12px; color: #4b5563;">
+              Para confirmar o modificar esta alternativa, por favor ingrese a su <strong>Portal del Paciente</strong> en nuestra web de reserva a la brevedad.
+            </p>
+
+            <div style="border-top: 1px solid #fca5a5; padding-top: 15px; margin-top: 25px; font-size: 10px; color: #9ca3af; text-align: center;">
+              <p>Este aviso clínico ha sido despachado en tiempo real desde la casilla de enlace médico oficial.</p>
+              <p>© 2026 MindSpace Chile. Ley 20.584 de Derechos y Deberes del Paciente.</p>
+            </div>
+          </div>
+        `;
+        sendGmail(gmailToken, appt.patientEmail, subject, bodyContent).catch((e) => console.error("Error dispatching suspension mail:", e));
+      }
+
       // 3. Format patient emergency dispatch
       const alertTime = new Date().toLocaleTimeString("es-CL", { hour: '2-digit', minute: '2-digit' });
       dispatchTrace.push(
-        `🚨 [${alertTime}] Notificación remitida a ${appt.patientName} (${appt.patientEmail}): Su consulta clínico del ${appt.date} @ ${appt.timeSlot} fue reprogramada por una emergencia personal médica. Bloque sugerido: ${nextProposed.date} en horario ${nextProposed.slot}.`
+        `🚨 [${alertTime}] Notificación remitiéndose a ${appt.patientName} (${appt.patientEmail}): Su consulta del ${appt.date} @ ${appt.timeSlot} fue suspendida. Alternativa: ${nextProposed.date} @ ${nextProposed.slot}.`
       );
     }
 
@@ -839,6 +886,25 @@ export default function ClinicianAgenda({ therapistUid, onJoinCall }: ClinicianA
     try {
       const apptRef = doc(db, "appointments", apptId);
       await updateDoc(apptRef, { status: newStatus });
+
+      if (newStatus === "canceled") {
+        const apptObj = appointments.find((a) => a.id === apptId);
+        const gmailToken = getCachedAccessToken();
+        if (gmailToken && apptObj && apptObj.patientEmail) {
+          const subject = "Aviso de Cancelación de Cita de Psicoterapia - MindSpace";
+          const body = `
+            <div style="font-family: Arial, sans-serif; max-width: 580px; margin: 0 auto; padding: 25px; border: 1px solid #fee2e2; border-radius: 16px; background-color: #f8fafc;">
+              <h2 style="color: #b91c1c; margin: 0 0 15px 0;">Consulta Psicológica Cancelada</h2>
+              <p>Estimado(a) <strong>${apptObj.patientName}</strong>,</p>
+              <p>Le informamos que su cita agendada para el día <strong>${apptObj.date}</strong> a las <strong>${apptObj.timeSlot} hrs</strong> ha sido cancelada.</p>
+              <p>Si requiere reagendar un nuevo espacio, por favor acceda a nuestro sistema en línea para revisar las horas disponibles en el calendario público.</p>
+              <hr style="border: none; border-top: 1px solid #cbd5e1; margin: 20px 0;" />
+              <p style="font-size: 11px; color: #64748b; text-align: center;">© 2026 MindSpace Chile. En cumplimiento de la Ley 20.584.</p>
+            </div>
+          `;
+          sendGmail(gmailToken, apptObj.patientEmail, subject, body).catch((e) => console.error("Error dispatching cancel mail:", e));
+        }
+      }
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `appointments/${apptId}`);
     }
