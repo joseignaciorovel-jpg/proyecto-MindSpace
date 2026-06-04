@@ -96,12 +96,10 @@ export default function PatientPortal({ therapistUid, therapistName, sessionPric
       try {
         const todayStr = new Date().toISOString().split("T")[0];
         let availSlots = [
-          "09:00 - 10:00",
-          "10:15 - 11:15",
-          "11:30 - 12:30",
-          "15:00 - 16:00",
-          "16:15 - 17:15",
-          "17:30 - 18:30"
+          "18:00 - 18:45",
+          "18:45 - 19:30",
+          "19:30 - 20:15",
+          "20:15 - 21:00"
         ];
         try {
           const savedAvail = localStorage.getItem("mindspace_availability");
@@ -263,14 +261,12 @@ export default function PatientPortal({ therapistUid, therapistName, sessionPric
     const fetchAvailableSlots = async () => {
       setLoadingSlots(true);
       try {
-        let availDays = [1, 2, 3, 4, 5];
+        let availDays = [1, 2, 3];
         let availSlots = [
-          "09:00 - 10:00",
-          "10:15 - 11:15",
-          "11:30 - 12:30",
-          "15:00 - 16:00",
-          "16:15 - 17:15",
-          "17:30 - 18:30"
+          "18:00 - 18:45",
+          "18:45 - 19:30",
+          "19:30 - 20:15",
+          "20:15 - 21:00"
         ];
         try {
           const savedAvail = localStorage.getItem("mindspace_availability");

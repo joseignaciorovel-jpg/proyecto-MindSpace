@@ -83,7 +83,7 @@ export default function ClinicianAgenda({ therapistUid, onJoinCall }: ClinicianA
   const [showAddAppt, setShowAddAppt] = useState(false);
   const [selectedPatId, setSelectedPatId] = useState("");
   const [apptDate, setApptDate] = useState(new Date().toISOString().split("T")[0]);
-  const [apptSlot, setApptSlot] = useState("09:00 - 10:00");
+  const [apptSlot, setApptSlot] = useState("18:00 - 18:45");
   const [apptNotes, setApptNotes] = useState("");
   const [apptPrice, setApptPrice] = useState(45000);
 
@@ -99,13 +99,10 @@ export default function ClinicianAgenda({ therapistUid, onJoinCall }: ClinicianA
       }
     } catch (e) {}
     return [
-      "09:00 - 10:00",
-      "10:15 - 11:15",
-      "11:30 - 12:30",
-      "14:00 - 15:00",
-      "15:15 - 16:15",
-      "16:30 - 17:30",
-      "17:45 - 18:45"
+      "18:00 - 18:45",
+      "18:45 - 19:30",
+      "19:30 - 20:15",
+      "20:15 - 21:00"
     ];
   });
 
@@ -157,7 +154,7 @@ export default function ClinicianAgenda({ therapistUid, onJoinCall }: ClinicianA
   ];
 
   // 1. Weekly Ordinal Availability Rules
-  const [availDays, setAvailDays] = useState<number[]>([1, 2, 3, 4, 5]); // Monday to Friday (1-5)
+  const [availDays, setAvailDays] = useState<number[]>([1, 2, 3]); // Monday to Wednesday (1-3)
   const [availSlots, setAvailSlots] = useState<string[]>(timeSlots);
 
   // 2. Emergency Suspensions State
@@ -213,10 +210,10 @@ export default function ClinicianAgenda({ therapistUid, onJoinCall }: ClinicianA
       const savedAvail = localStorage.getItem("mindspace_availability");
       if (savedAvail) {
         const parsed = JSON.parse(savedAvail);
-        setAvailDays(parsed.days || [1, 2, 3, 4, 5]);
+        setAvailDays(parsed.days || [1, 2, 3]);
         setAvailSlots(parsed.slots || timeSlots);
       } else {
-        setAvailDays([1, 2, 3, 4, 5]);
+        setAvailDays([1, 2, 3]);
         setAvailSlots(timeSlots);
       }
 
@@ -1341,11 +1338,28 @@ export default function ClinicianAgenda({ therapistUid, onJoinCall }: ClinicianA
                   </div>
                 </div>
 
-                <div className="flex justify-end pt-3 border-t">
+                <div className="flex justify-between pt-3 border-t items-center flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const standardSlots = ["18:00 - 18:45", "18:45 - 19:30", "19:30 - 20:15", "20:15 - 21:00"];
+                      setTimeSlots(standardSlots);
+                      setAvailSlots(standardSlots);
+                      setAvailDays([1, 2, 3]);
+                      localStorage.setItem("mindspace_defined_slots", JSON.stringify(standardSlots));
+                      localStorage.setItem("mindspace_availability", JSON.stringify({ days: [1, 2, 3], slots: standardSlots }));
+                      window.dispatchEvent(new Event("storage"));
+                      alert("📥 Se ha aplicado y guardado el horario estándar: Lunes, Martes y Miércoles de 18:00 a 21:00 hrs (Sesiones de 45 min) sincronizado transversalmente en toda la plataforma.");
+                    }}
+                    className="bg-emerald-50 text-emerald-800 dark:bg-emerald-950/45 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-900 px-4 py-2 rounded-xl hover:bg-emerald-100 transition-all text-xs font-bold cursor-pointer"
+                  >
+                    ⚡ Aplicar Jornada de 18:00 a 21:00 hrs (Lu, Ma, Mi)
+                  </button>
+
                   <button
                     type="button"
                     onClick={handleSaveWeeklyAvailability}
-                    className="bg-slate-900 text-white px-5 py-2 rounded-xl hover:bg-slate-800 font-semibold transition-all shadow-md"
+                    className="bg-slate-900 text-white px-5 py-2 rounded-xl hover:bg-slate-800 font-semibold transition-all shadow-md cursor-pointer"
                   >
                     Guardar Configuración Ordinaria
                   </button>

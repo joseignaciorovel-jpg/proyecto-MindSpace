@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { collection, doc, setDoc, updateDoc, Timestamp } from "firebase/firestore";
 import { db, handleFirestoreError, OperationType } from "../firebase";
 import { Appointment } from "../types";
@@ -110,17 +110,47 @@ export default function BookingCalendar({
       console.error("Error loading availability keys", e);
     }
     return {
-      days: [1, 2, 3, 4, 5], // Monday to Friday (1-5)
+      days: [1, 2, 3], // Lunes, Martes, Miércoles (1-3)
       slots: [
-        "09:00 - 10:00",
-        "10:15 - 11:15",
-        "11:30 - 12:30",
-        "15:00 - 16:00",
-        "16:15 - 17:15",
-        "17:30 - 18:30"
+        "18:00 - 18:45",
+        "18:45 - 19:30",
+        "19:30 - 20:15",
+        "20:15 - 21:00"
       ]
     };
   });
+
+  // Keep weekly availability in sync with clinician configuration dynamically
+  useEffect(() => {
+    const handleSyncAvailability = () => {
+      try {
+        const saved = localStorage.getItem("mindspace_availability");
+        if (saved) {
+          setWeeklyAvailability(JSON.parse(saved));
+        } else {
+          setWeeklyAvailability({
+            days: [1, 2, 3],
+            slots: [
+              "18:00 - 18:45",
+              "18:45 - 19:30",
+              "19:30 - 20:15",
+              "20:15 - 21:00"
+            ]
+          });
+        }
+      } catch (e) {
+        console.error("Error syncing availability", e);
+      }
+    };
+
+    window.addEventListener("storage", handleSyncAvailability);
+    // Also perform a sync immediately on mount in case it was updated on another screen but this component didn't rerender yet
+    handleSyncAvailability();
+
+    return () => {
+      window.removeEventListener("storage", handleSyncAvailability);
+    };
+  }, []);
 
   // Load active emergency suspensions from storage
   const [emergencySuspensions, setEmergencySuspensions] = useState<any[]>(() => {
