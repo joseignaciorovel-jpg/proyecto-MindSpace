@@ -77,6 +77,7 @@ export default function App() {
   // Session Auto-Lock system (Seguridad por Inactividad)
   const [inactivityTimer, setInactivityTimer] = useState<number>(900); // 15 minutes by default (900s)
   const [isAppAutoLocked, setIsAppAutoLocked] = useState<boolean>(false);
+  const [authError, setAuthError] = useState<string | null>(null);
 
   // Patient feedback evaluation states
   const [reviewFormState, setReviewFormState] = useState<{
@@ -227,6 +228,7 @@ export default function App() {
   }, [user, portalMode]);
 
   const handleLoginGoogle = async () => {
+    setAuthError(null);
     try {
       // Configure scopes for Gmail sending support
       googleProvider.addScope("https://www.googleapis.com/auth/gmail.send");
@@ -241,7 +243,15 @@ export default function App() {
       }
     } catch (err: any) {
       console.error("Specialist Google Authentication error:", err);
-      alert("Hubo un problema al ingresar con Google. Por favor, intente de nuevo.");
+      let errorMsg = "Hubo un problema al ingresar con Google. Por favor, intente de nuevo.";
+      if (err.code === "auth/popup-closed-by-user") {
+        errorMsg = "La ventana de conexión con Google fue cerrada antes de completar el inicio de sesión. Por favor, inténtelo de nuevo en el botón inferior.";
+      } else if (err.code === "auth/cancelled-popup-request") {
+        errorMsg = "La solicitud fue cancelada porque se abrió otra ventana de autenticación.";
+      } else if (err.message) {
+        errorMsg = `Error: ${err.message}`;
+      }
+      setAuthError(errorMsg);
     }
   };
 
@@ -790,6 +800,22 @@ export default function App() {
                             <li>Módulo de Videollamadas Cifradas y Contabilidad</li>
                           </ul>
                         </div>
+
+                        {authError && (
+                          <div className="bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 p-3 rounded-xl text-left text-xs text-rose-600 dark:text-rose-400 flex items-start gap-2 animate-in fade-in slide-in-from-top-1">
+                            <span className="text-sm mt-0.5">⚠️</span>
+                            <div className="flex-1 space-y-1">
+                              <p className="font-bold">Error de Acceso</p>
+                              <p className="text-[11px] leading-snug">{authError}</p>
+                            </div>
+                            <button 
+                              onClick={() => setAuthError(null)}
+                              className="text-gray-400 hover:text-red-600 transition text-[11px] font-bold px-1"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        )}
 
                         <button
                           onClick={handleLoginGoogle}

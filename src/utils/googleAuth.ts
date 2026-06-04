@@ -36,7 +36,7 @@ export async function requestGoogleAuthToken(): Promise<string | null> {
     return token;
   } catch (err) {
     console.error("[Google Auth Error]: Failed to authenticate or retrieve credentials.", err);
-    return null;
+    throw err;
   }
 }
 

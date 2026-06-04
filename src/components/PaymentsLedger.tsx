@@ -204,6 +204,7 @@ export default function PaymentsLedger({ therapistUid }: PaymentsLedgerProps) {
   };
 
   const handleConnectGmail = async () => {
+    setEmailError(null);
     try {
       const token = await requestGoogleAuthToken();
       if (token) {
@@ -211,6 +212,13 @@ export default function PaymentsLedger({ therapistUid }: PaymentsLedgerProps) {
       }
     } catch (e: any) {
       console.error(e);
+      let errorMsg = "La ventana de conexión con Google se cerró antes de completar el inicio de sesión.";
+      if (e.code === "auth/popup-closed-by-user") {
+        errorMsg = "La ventana de conexión se cerró antes de completar el inicio de sesión con Google. Intente nuevamente.";
+      } else if (e.message) {
+        errorMsg = `Error de conexión: ${e.message}`;
+      }
+      setEmailError(errorMsg);
     }
   };
 

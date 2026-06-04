@@ -120,6 +120,7 @@ export default function ClinicianSettings({ therapistUid, currentSettings, onSet
   const [isSendingTestEmail, setIsSendingTestEmail] = useState(false);
   const [testEmailSuccess, setTestEmailSuccess] = useState(false);
   const [testEmailError, setTestEmailError] = useState<string | null>(null);
+  const [gmailConnectionError, setGmailConnectionError] = useState<string | null>(null);
 
   useEffect(() => {
     setGmailToken(getCachedAccessToken());
@@ -1124,15 +1125,33 @@ export default function ClinicianSettings({ therapistUid, currentSettings, onSet
                       <button
                         type="button"
                         onClick={async () => {
-                          const token = await requestGoogleAuthToken();
-                          if (token) {
-                            setGmailToken(token);
+                          setGmailConnectionError(null);
+                          try {
+                            const token = await requestGoogleAuthToken();
+                            if (token) {
+                              setGmailToken(token);
+                            }
+                          } catch (err: any) {
+                            console.error("Gmail authorization error in settings:", err);
+                            let errorMsg = "La conexión con Google fue cancelada o bloqueada por el navegador.";
+                            if (err.code === "auth/popup-closed-by-user") {
+                              errorMsg = "La ventana de conexión se cerró antes de completar la autorización de Gmail. Intente de nuevo asegurando completar el flujo.";
+                            } else if (err.message) {
+                              errorMsg = `Error: ${err.message}`;
+                            }
+                            setGmailConnectionError(errorMsg);
                           }
                         }}
                         className="w-full bg-[#1e293b] hover:bg-slate-850 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 p-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 shadow cursor-pointer"
                       >
                         <Mail className="w-4 h-4 text-emerald-500 animate-bounce" /> Autorizar & Conectar Gmail
                       </button>
+
+                      {gmailConnectionError && (
+                        <p className="text-[10px] text-rose-500 bg-rose-50 dark:bg-rose-950/40 p-2 border border-rose-200 rounded-lg text-center font-bold animate-in fade-in">
+                          {gmailConnectionError}
+                        </p>
+                      )}
                     </div>
                   )}
                 </div>
