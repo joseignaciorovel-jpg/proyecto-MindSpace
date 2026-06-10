@@ -1004,24 +1004,24 @@ export default function PatientPortal({ therapistUid, therapistName, sessionPric
 
                           {/* Chilean SII Billing / LibreDTE Integración Details */}
                           {isPaid ? (
-                            <div className="p-3 bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800 rounded-xl space-y-1.5 text-[11px] font-sans">
-                              <div className="flex justify-between">
-                                <span className="font-semibold text-slate-700 dark:text-slate-300">Boleta de Honorarios:</span>
-                                <span className="font-mono text-cyan-600 dark:text-cyan-400 font-extrabold">SII Folio Nº {app.boletaFolio || "20260492"}</span>
-                              </div>
-                              <div className="flex justify-between text-[10px] text-slate-500 dark:text-slate-400">
-                                <span>Retención Profesional SII (14,5%):</span>
-                                <span className="font-mono text-amber-600 font-bold">-${(app.boletaRetencion || Math.round((app.price || 50000) * 0.145)).toLocaleString('es-CL')} CLP</span>
-                              </div>
-                              <div className="flex justify-between text-[10px] text-slate-500 dark:text-slate-400">
-                                <span>Monto Honorario Bruto:</span>
-                                <span className="font-mono">${(app.price || 50050).toLocaleString('es-CL')} CLP</span>
-                              </div>
-                              <div className="flex justify-between text-slate-800 dark:text-white font-bold pt-1 border-t dark:border-slate-800">
-                                <span>Líquido Recibido:</span>
-                                <span className="text-emerald-600 dark:text-emerald-400 font-bold">${(app.boletaLiquido || Math.round((app.price || 50000) * 0.855)).toLocaleString('es-CL')} CLP</span>
-                              </div>
-                              {app.boletaUrl ? (
+                            app.boletaUrl ? (
+                              <div className="p-3 bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800 rounded-xl space-y-1.5 text-[11px] font-sans">
+                                <div className="flex justify-between">
+                                  <span className="font-semibold text-slate-700 dark:text-slate-300">Boleta de Honorarios:</span>
+                                  <span className="font-mono text-cyan-600 dark:text-cyan-400 font-extrabold">SII Folio Nº {app.boletaFolio || "20260492"}</span>
+                                </div>
+                                <div className="flex justify-between text-[10px] text-slate-500 dark:text-slate-400">
+                                  <span>Retención Profesional SII (14,5%):</span>
+                                  <span className="font-mono text-amber-600 font-bold">-${(app.boletaRetencion || Math.round((app.price || 50000) * 0.145)).toLocaleString('es-CL')} CLP</span>
+                                </div>
+                                <div className="flex justify-between text-[10px] text-slate-500 dark:text-slate-400">
+                                  <span>Monto Honorario Bruto:</span>
+                                  <span className="font-mono">${(app.price || 50000).toLocaleString('es-CL')} CLP</span>
+                                </div>
+                                <div className="flex justify-between text-slate-800 dark:text-white font-bold pt-1 border-t dark:border-slate-800">
+                                  <span>Líquido Recibido:</span>
+                                  <span className="text-emerald-600 dark:text-emerald-400 font-bold">${(app.boletaLiquido || Math.round((app.price || 50000) * 0.855)).toLocaleString('es-CL')} CLP</span>
+                                </div>
                                 <a 
                                   href={app.boletaUrl}
                                   target="_blank"
@@ -1030,17 +1030,17 @@ export default function PatientPortal({ therapistUid, therapistName, sessionPric
                                 >
                                   📥 Descargar Boleta de Honorarios (BHE)
                                 </a>
-                              ) : (
-                                <a 
-                                  href={`https://sii.libredte.cl/bhe-folio-20260492-sim.pdf`}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="mt-2 w-full bg-slate-900 hover:bg-slate-950 dark:bg-slate-800 dark:hover:bg-slate-750 text-white p-2 rounded-xl text-[10px] font-extrabold flex items-center justify-center gap-1 hover:brightness-110 active:scale-98 transition duration-100 uppercase"
-                                >
-                                  📥 Descargar Boleta de Honorarios (BHE)
-                                </a>
-                              )}
-                            </div>
+                              </div>
+                            ) : (
+                              <div className="p-3 bg-emerald-50/40 dark:bg-emerald-950/20 border border-emerald-100/50 dark:border-emerald-900/50 rounded-xl text-[11px] text-slate-700 dark:text-zinc-300 font-sans space-y-1">
+                                <p className="font-bold text-emerald-700 dark:text-emerald-400 text-xs flex items-center gap-1">
+                                  <span className="text-emerald-505 dark:text-emerald-400 font-extrabold">✓</span> Pago Acreditado
+                                </p>
+                                <p className="leading-relaxed text-slate-600 dark:text-slate-400 text-[10.5px]">
+                                  Su pago en línea ha sido registrado con éxito. La cita se encuentra confirmada y su boleta será emitida manualmente.
+                                </p>
+                              </div>
+                            )
                           ) : (
                             <div className="p-3 bg-blue-50/50 dark:bg-slate-900/35 border border-blue-100/50 dark:border-slate-800 rounded-xl space-y-2 text-[11px]">
                               <p className="text-[10px] leading-relaxed text-slate-650 dark:text-slate-400 font-medium">

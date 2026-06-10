@@ -542,7 +542,10 @@ export default function BookingCalendar({
                   </div>
                 )}
 
-                <label className="block text-sm font-semibold text-gray-700 pt-2">Horarios Disponibles</label>
+                <label className="block text-sm sm:text-[14px] font-extrabold text-slate-900 dark:text-emerald-450 pt-2 tracking-wide flex items-center gap-2 uppercase">
+                  <Clock className="w-4 h-4 text-emerald-500 animate-pulse shrink-0" />
+                  Horarios Disponibles
+                </label>
                 {!date ? (
                   <p className="text-xs text-gray-400 italic">Por favor, seleccione una fecha para desplegar los bloques disponibles.</p>
                 ) : renderedSlots.length === 0 ? (
@@ -550,19 +553,20 @@ export default function BookingCalendar({
                     No quedan bloques clínicos disponibles para resolver en esta fecha.
                   </div>
                 ) : (
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-2 gap-2.5">
                     {renderedSlots.map((slot) => (
                       <button
                         type="button"
                         key={slot}
                         onClick={() => setTimeSlot(slot)}
-                        className={`p-3 rounded-lg border text-xs font-mono font-medium transition-all text-center ${
+                        className={`p-3.5 rounded-xl border-2 text-[13px] sm:text-[14px] font-mono font-bold transition-all duration-150 text-center flex items-center justify-center gap-2 focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer ${
                           timeSlot === slot
-                            ? "bg-slate-900 text-white border-slate-900 shadow-md transform scale-102"
-                             : "border-gray-200 text-gray-600 hover:border-slate-300 hover:bg-slate-50"
+                            ? "bg-emerald-600 text-white border-emerald-600 dark:bg-emerald-500 dark:border-emerald-500 shadow-[0_4px_12px_rgba(16,185,129,0.3)] dark:shadow-[0_4px_15px_rgba(16,185,129,0.4)] scale-103 z-10"
+                            : "bg-white dark:bg-slate-900/95 border-slate-250 dark:border-slate-800 text-slate-900 dark:text-slate-100 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 hover:border-emerald-500 dark:hover:border-emerald-500/80 hover:text-emerald-700 dark:hover:text-emerald-300 hover:scale-[1.01] hover:shadow-xs"
                         }`}
                       >
-                        {slot}
+                        <span className={`w-2 h-2 rounded-full shrink-0 transition-colors duration-150 ${timeSlot === slot ? "bg-white animate-ping" : "bg-emerald-500"}`} />
+                        <span>{slot}</span>
                       </button>
                     ))}
                   </div>

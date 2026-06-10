@@ -19,34 +19,44 @@ app.use(express.urlencoded({ extended: true }));
  */
 async function updateAppointmentStatusPaid(appId: string, amount: number) {
   try {
-    const rate2026 = 0.145;
-    const bruto = amount || 50000;
-    const retencionVal = Math.round(bruto * rate2026);
-    const liquidoVal = bruto - retencionVal;
-    
-    // Assign unique SII legal folio & custom download receipt URL
-    const folioNum = 202601 + Math.floor(Math.random() * 9500);
-    const boletaUrl = `https://sii.libredte.cl/bhe-folio-${folioNum}-sim.pdf`;
+    const disableSiiBilling = process.env.DISABLE_SII_BILLING !== "false"; // Default to true (disabled)
 
     const projectId = "sara-35270";
     const databaseId = "ai-studio-3d451c93-9738-452c-87b2-4b4817e76096";
     const apiKey = "AIzaSyDzy-Bq0RhiH6dif0tQWpvPCsJ-3FE-wgs";
 
-    // Firestore Document REST PATCH
-    const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${databaseId}/documents/appointments/${appId}?key=${apiKey}&updateMask.fieldPaths=paymentStatus&updateMask.fieldPaths=boletaUrl&updateMask.fieldPaths=boletaFolio&updateMask.fieldPaths=boletaBruto&updateMask.fieldPaths=boletaRetencion&updateMask.fieldPaths=boletaLiquido`;
-
-    const body = {
+    let url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${databaseId}/documents/appointments/${appId}?key=${apiKey}&updateMask.fieldPaths=paymentStatus`;
+    
+    const body: any = {
       fields: {
-        paymentStatus: { stringValue: "paid" },
-        boletaUrl: { stringValue: boletaUrl },
-        boletaFolio: { integerValue: String(folioNum) },
-        boletaBruto: { integerValue: String(bruto) },
-        boletaRetencion: { integerValue: String(retencionVal) },
-        boletaLiquido: { integerValue: String(liquidoVal) }
+        paymentStatus: { stringValue: "paid" }
       }
     };
 
-    console.log(`[Firestore REST] Attempting to mark appointment ${appId} as paid with amount $${bruto} CLP...`);
+    let folioNum = 0;
+    let boletaUrl = "";
+    let retencionVal = 0;
+    let liquidoVal = 0;
+
+    if (!disableSiiBilling) {
+      const rate2026 = 0.145;
+      const bruto = amount || 50000;
+      retencionVal = Math.round(bruto * rate2026);
+      liquidoVal = bruto - retencionVal;
+      
+      // Assign unique SII legal folio & custom download receipt URL
+      folioNum = 202601 + Math.floor(Math.random() * 9500);
+      boletaUrl = `https://sii.libredte.cl/bhe-folio-${folioNum}-sim.pdf`;
+
+      url += `&updateMask.fieldPaths=boletaUrl&updateMask.fieldPaths=boletaFolio&updateMask.fieldPaths=boletaBruto&updateMask.fieldPaths=boletaRetencion&updateMask.fieldPaths=boletaLiquido`;
+      body.fields.boletaUrl = { stringValue: boletaUrl };
+      body.fields.boletaFolio = { integerValue: String(folioNum) };
+      body.fields.boletaBruto = { integerValue: String(bruto) };
+      body.fields.boletaRetencion = { integerValue: String(retencionVal) };
+      body.fields.boletaLiquido = { integerValue: String(liquidoVal) };
+    }
+
+    console.log(`[Firestore REST] Attempting to mark appointment ${appId} as paid with amount $${amount || 50000} CLP...`);
     const response = await fetch(url, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -100,7 +110,7 @@ app.post("/api/flow/create-payment", async (req, res) => {
 
   const flowApiKey = process.env.FLOW_API_KEY;
   const flowSecretKey = process.env.FLOW_SECRET_KEY;
-  const flowApiUrl = process.env.FLOW_API_URL || "https://sandbox.flow.cl/api";
+  const flowApiUrl = process.env.FLOW_API_URL || "https://www.flow.cl/api";
   const numAmount = Number(price);
 
   // If real Flow credentials are set up, attempt genuine Flow creation!
@@ -404,7 +414,7 @@ app.all("/api/flow/return", async (req, res) => {
   
   const flowApiKey = process.env.FLOW_API_KEY;
   const flowSecretKey = process.env.FLOW_SECRET_KEY;
-  const flowApiUrl = process.env.FLOW_API_URL || "https://sandbox.flow.cl/api";
+  const flowApiUrl = process.env.FLOW_API_URL || "https://www.flow.cl/api";
 
   let statusNum = 3; // default: failed/canceled
   let amountVal = 50000;
@@ -468,6 +478,7 @@ app.all("/api/flow/return", async (req, res) => {
     receiptInfo = await updateAppointmentStatusPaid(appId, amountVal);
   }
 
+  const disableSiiBilling = process.env.DISABLE_SII_BILLING !== "false";
   const rate2026 = 0.145;
   const bruto = amountVal;
   const retencionVal = receiptInfo?.retencionVal || Math.round(bruto * rate2026);
@@ -485,67 +496,100 @@ app.all("/api/flow/return", async (req, res) => {
       <script src="https://cdn.tailwindcss.com"></script>
     </head>
     <body class="bg-[#f8fafc] dark:bg-slate-950 flex justify-center items-center min-h-screen px-4 py-8 font-sans transition-colors duration-200">
-      <div class="bg-white dark:bg-slate-900 border border-zinc-200 dark:border-slate-800 p-8 rounded-3xl shadow-2xl max-w-lg w-full space-y-6 text-left relative animate-in fade-in zoom-in-95 duration-300">
+      <div class="bg-white dark:bg-slate-900 border border-zinc-200 dark:border-slate-800 p-8 rounded-3xl shadow-2xl max-w-lg w-full space-y-6 text-left relative animate-in fade-in duration-300">
         
         ${isApproved ? `
           <!-- Approved state badge header -->
           <div class="flex items-center gap-3 border-b dark:border-slate-800 pb-5">
-            <div class="bg-emerald-100 dark:bg-emerald-950/50 text-emerald-600 p-3 rounded-2xl border border-emerald-200 dark:border-emerald-900/50 shadow-xs">
-              <span class="text-xl">✅</span>
+            <div class="bg-teal-50 dark:bg-teal-950/40 text-teal-600 dark:text-teal-400 p-3 rounded-2xl border border-teal-150 dark:border-teal-900/40 shadow-xs">
+              <span class="text-xl">✓</span>
             </div>
             <div>
-              <h3 class="text-lg font-black text-slate-900 dark:text-white">Pago Recibido Correctamente</h3>
-              <p class="text-xs text-teal-600 dark:text-emerald-450 font-bold uppercase mt-0.5 tracking-wider">● Boleta de Honorarios SII Emitida</p>
+              <h3 class="text-lg font-extrabold text-teal-800 dark:text-teal-300">Pago Recibido Correctamente</h3>
+              <p class="text-xs text-emerald-600 dark:text-emerald-400 font-bold uppercase mt-0.5 tracking-wider">● Registro Clínico Confirmado</p>
             </div>
           </div>
 
           <div class="space-y-4 font-sans">
             <p class="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-              Estimado(a) receptor, el pago por un monto de <strong>$${bruto.toLocaleString('es-CL')} CLP</strong> ha sido acreditado en la pasarela segura. Conforme a las normativas de retención vigentes en Chile (<strong>14,5% año 2026</strong>), se ha generado e inscrito su Boleta de Honorarios Electrónica de forma automática.
+              Estimado(a) paciente, el pago por un monto de <strong>$${bruto.toLocaleString('es-CL')} CLP</strong> ha sido acreditado en la pasarela segura. Su hora de atención médica ha sido registrada bajo el estado <strong class="text-emerald-600 dark:text-emerald-400 font-bold">PAGADA</strong> de forma exitosa.
             </p>
 
-            <!-- Detailed invoice invoice specs breakdown -->
-            <div class="bg-slate-50 dark:bg-slate-950 border border-slate-150 dark:border-slate-800 rounded-2xl p-5 space-y-3 font-mono text-xs leading-normal">
-              <div class="flex justify-between font-bold pb-2 border-b dark:border-slate-850">
-                <span class="text-slate-850 dark:text-white">Boleta de Honorarios de Prestador</span>
-                <span class="text-emerald-500 font-bold">Folio Nº ${folioNum}</span>
+            ${disableSiiBilling ? `
+              <!-- Simple Payment Specs (No SII, No BHE details) -->
+              <div class="bg-slate-50 dark:bg-slate-950 border border-slate-150 dark:border-slate-800 rounded-2xl p-5 space-y-3 font-mono text-xs leading-normal">
+                <div class="flex justify-between font-bold pb-2 border-b dark:border-slate-850">
+                  <span class="text-slate-850 dark:text-white">Comprobante de Pago Electrónico</span>
+                  <span class="text-emerald-500 font-bold">Flow Transacción</span>
+                </div>
+                <div class="flex justify-between text-slate-600 dark:text-slate-450">
+                  <span>RUT Paciente:</span>
+                  <span class="font-bold text-slate-900 dark:text-white">${decodeURIComponent(rut)}</span>
+                </div>
+                <div class="flex justify-between text-slate-655 dark:text-slate-455">
+                  <span>Glosa de Servicio:</span>
+                  <span class="text-right">Prestación Psicoterapéutica</span>
+                </div>
+                <div class="flex justify-between text-slate-905 dark:text-white font-black text-sm pt-2 border-t border-dashed dark:border-slate-800">
+                  <span>Monto Total Pagado:</span>
+                  <span class="text-emerald-500">$${bruto.toLocaleString('es-CL')} CLP</span>
+                </div>
               </div>
-              <div class="flex justify-between text-slate-600 dark:text-slate-450">
-                <span>RUT Paciente:</span>
-                <span class="font-bold text-slate-900 dark:text-white">${decodeURIComponent(rut)}</span>
+            ` : `
+              <!-- Detailed invoice specs breakdown with BHE -->
+              <div class="bg-slate-50 dark:bg-slate-950 border border-slate-150 dark:border-slate-800 rounded-2xl p-5 space-y-3 font-mono text-xs leading-normal">
+                <div class="flex justify-between font-bold pb-2 border-b dark:border-slate-850">
+                  <span class="text-slate-850 dark:text-white">Boleta de Honorarios de Prestador</span>
+                  <span class="text-emerald-500 font-bold">Folio Nº ${folioNum}</span>
+                </div>
+                <div class="flex justify-between text-slate-600 dark:text-slate-450">
+                  <span>RUT Paciente:</span>
+                  <span class="font-bold text-slate-900 dark:text-white">${decodeURIComponent(rut)}</span>
+                </div>
+                <div class="flex justify-between text-slate-650 dark:text-slate-450">
+                  <span>Glosa de Servicio:</span>
+                  <span class="text-right">Prestación Psicoterapéutica</span>
+                </div>
+                <div class="flex justify-between text-slate-650 dark:text-slate-450 pt-1.5 border-t dark:border-slate-8xx">
+                  <span>Honorarios Brutos:</span>
+                  <span class="font-bold text-slate-900 dark:text-white">$${bruto.toLocaleString('es-CL')} CLP</span>
+                </div>
+                <div class="flex justify-between text-amber-600 font-bold">
+                  <span>Retención 14.5% (2026):</span>
+                  <span>- $${retencionVal.toLocaleString('es-CL')} CLP</span>
+                </div>
+                <div class="flex justify-between text-slate-900 dark:text-white font-black text-sm pt-2 border-t border-dashed dark:border-slate-800">
+                  <span>Monto Líquido:</span>
+                  <span class="text-emerald-500">$${liquidoVal.toLocaleString('es-CL')} CLP</span>
+                </div>
               </div>
-              <div class="flex justify-between text-slate-650 dark:text-slate-450">
-                <span>Glosa de Servicio:</span>
-                <span class="text-right">Prestación Psicoterapéutica</span>
-              </div>
-              <div class="flex justify-between text-slate-650 dark:text-slate-450 pt-1.5 border-t dark:border-slate-8xx">
-                <span>Honorarios Brutos:</span>
-                <span class="font-bold text-slate-900 dark:text-white">$${bruto.toLocaleString('es-CL')} CLP</span>
-              </div>
-              <div class="flex justify-between text-amber-600 font-bold">
-                <span>Retención 14.5% (2026):</span>
-                <span>- $${retencionVal.toLocaleString('es-CL')} CLP</span>
-              </div>
-              <div class="flex justify-between text-slate-900 dark:text-white font-black text-sm pt-2 border-t border-dashed dark:border-slate-800">
-                <span>Monto Líquido:</span>
-                <span class="text-emerald-500">$${liquidoVal.toLocaleString('es-CL')} CLP</span>
-              </div>
-            </div>
 
-            <!-- Download button official PDF LibreDTE -->
-            <div class="p-4 bg-teal-50/20 dark:bg-slate-950 border border-teal-150 dark:border-slate-800 rounded-2xl flex items-center justify-between gap-3 text-xs">
-              <div class="space-y-0.5">
-                <h5 class="font-extrabold dark:text-white text-emerald-600">Reembolso Isapre / Fonasa Listo</h5>
-                <p class="text-[10px] text-gray-400">Documento clínico legalizado</p>
+              <!-- Download button official PDF LibreDTE -->
+              <div class="p-4 bg-teal-50/20 dark:bg-slate-950 border border-teal-150 dark:border-slate-800 rounded-2xl flex items-center justify-between gap-3 text-xs">
+                <div class="space-y-0.5">
+                  <h5 class="font-extrabold dark:text-white text-emerald-600">Reembolso Isapre / Fonasa Listo</h5>
+                  <p class="text-[10px] text-gray-400">Documento clínico legalizado</p>
+                </div>
+                
+                <a 
+                  href="${boletaUrl}" 
+                  target="_blank" 
+                  class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold p-2 px-3.5 rounded-xl shadow-md transition text-[11px] block text-center"
+                >
+                  📥 Descargar BHE Oficial
+                </a>
               </div>
-              
-              <a 
-                href="${boletaUrl}" 
-                target="_blank" 
-                class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold p-2 px-3.5 rounded-xl shadow-md transition text-[11px] block text-center"
-              >
-                📥 Descargar BHE Oficial
-              </a>
+            `}
+
+            <!-- Email Backup Notification Block -->
+            <div class="p-4 bg-teal-50/10 dark:bg-teal-950/15 border border-teal-100/50 dark:border-teal-900/40 rounded-2xl flex items-start gap-3 text-xs leading-relaxed">
+              <div class="text-lg shrink-0">📧</div>
+              <div class="space-y-1">
+                <h5 class="font-extrabold text-teal-800 dark:text-teal-400">Respaldo de Correo Profesional</h5>
+                <p class="text-[10.5px] text-slate-600 dark:text-slate-400">
+                  Un correo electrónico de confirmación ha sido enviado automáticamente a <strong class="text-slate-900 dark:text-slate-200 font-extrabold">${email}</strong> con su comprobante del pago seguro e indicaciones de la cita.
+                </p>
+              </div>
             </div>
           </div>
 
@@ -569,7 +613,7 @@ app.all("/api/flow/return", async (req, res) => {
             <p class="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
               La transacción ha sido cancelada por el usuario o rechazada por la red Webpay Plus de Flow. Por favor regrese al portal clínico y verifique el método de pago e intente nuevamente.
             </p>
-            <p class="text-xs text-slate-500 font-medium">Su cita permanece agendada bajo el estado de <strong>Pre-Reservada</strong>.</p>
+            <p class="text-xs text-slate-550 font-medium">Su cita permanece agendada bajo el estado de <strong>Pre-Reservada</strong>.</p>
           </div>
         `}
 
@@ -578,9 +622,9 @@ app.all("/api/flow/return", async (req, res) => {
           <button 
             type="button"
             onClick="window.close(); if(window.opener) { window.opener.location.reload(); } else { window.location.href = window.location.origin + '/?mode=patient'; }"
-            class="bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs font-extrabold py-3.5 px-6 rounded-xl transition hover:opacity-90 tracking-wide uppercase cursor-pointer"
+            class="bg-teal-700 hover:bg-teal-800 dark:bg-teal-600 dark:hover:bg-teal-700 text-white text-xs font-extrabold py-4 px-6 rounded-xl transition-all shadow-md hover:shadow-lg active:scale-98 tracking-wide uppercase cursor-pointer"
           >
-            ← Volver al Portal de Paciente (EloraNotes)
+            ← Volver al Portal de Paciente (MindSpace)
           </button>
         </div>
       </div>
@@ -598,7 +642,7 @@ app.post("/api/flow/confirm", async (req, res) => {
 
   const flowApiKey = process.env.FLOW_API_KEY;
   const flowSecretKey = process.env.FLOW_SECRET_KEY;
-  const flowApiUrl = process.env.FLOW_API_URL || "https://sandbox.flow.cl/api";
+  const flowApiUrl = process.env.FLOW_API_URL || "https://www.flow.cl/api";
 
   const isSimToken = typeof token === "string" && token.startsWith("FLW_SII_SIM_");
   if (!isSimToken && hasRealFlowCredentials() && flowApiKey && flowSecretKey) {
