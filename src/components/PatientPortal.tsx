@@ -547,7 +547,7 @@ export default function PatientPortal({ therapistUid, therapistName, sessionPric
 
       const data = await res.json();
       if (data.success && data.paymentUrl) {
-        window.open(data.paymentUrl, "_blank");
+        window.location.href = data.paymentUrl;
       } else {
         throw new Error(data.error || "Respuesta inválida de la pasarela.");
       }

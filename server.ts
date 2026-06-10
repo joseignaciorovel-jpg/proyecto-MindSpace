@@ -65,6 +65,31 @@ async function updateAppointmentStatusPaid(appId: string, amount: number) {
   }
 }
 
+function hasRealFlowCredentials(): boolean {
+  const flowApiKey = process.env.FLOW_API_KEY;
+  const flowSecretKey = process.env.FLOW_SECRET_KEY;
+  if (!flowApiKey || !flowSecretKey) return false;
+  
+  const apiKeyLower = flowApiKey.toLowerCase().trim();
+  const secretKeyLower = flowSecretKey.toLowerCase().trim();
+  
+  if (
+    apiKeyLower === "" || 
+    apiKeyLower === "your_flow_api_key" || 
+    apiKeyLower === "your_flow_secret_key" || 
+    apiKeyLower.includes("dummy") || 
+    apiKeyLower.includes("placeholder") ||
+    secretKeyLower === "" || 
+    secretKeyLower === "your_flow_secret_key" || 
+    secretKeyLower === "your_flow_api_key" || 
+    secretKeyLower.includes("dummy") || 
+    secretKeyLower.includes("placeholder")
+  ) {
+    return false;
+  }
+  return true;
+}
+
 // Flow payment and LibreDTE BHE automation endpoints (Chilean SII context for 2026)
 app.post("/api/flow/create-payment", async (req, res) => {
   const { appointmentId, price, patientEmail, patientName, patientRut } = req.body;
@@ -79,7 +104,7 @@ app.post("/api/flow/create-payment", async (req, res) => {
   const numAmount = Number(price);
 
   // If real Flow credentials are set up, attempt genuine Flow creation!
-  if (flowApiKey && flowSecretKey) {
+  if (hasRealFlowCredentials() && flowApiKey && flowSecretKey) {
     try {
       console.log("[Flow Real API] Initiating transaction with Flow API keys...");
       const baseUrl = process.env.APP_URL || "http://localhost:3000";
@@ -389,7 +414,8 @@ app.all("/api/flow/return", async (req, res) => {
   let rut = "11.111.111-1";
 
   // If real token query parameter is active and we have Flow secret credentials
-  if (token && flowApiKey && flowSecretKey) {
+  const isSimToken = typeof token === "string" && token.startsWith("FLW_SII_SIM_");
+  if (token && !isSimToken && hasRealFlowCredentials() && flowApiKey && flowSecretKey) {
     try {
       console.log(`[Flow Return] Verifying token ${token} with real Flow payment status API...`);
       
@@ -574,7 +600,8 @@ app.post("/api/flow/confirm", async (req, res) => {
   const flowSecretKey = process.env.FLOW_SECRET_KEY;
   const flowApiUrl = process.env.FLOW_API_URL || "https://sandbox.flow.cl/api";
 
-  if (flowApiKey && flowSecretKey) {
+  const isSimToken = typeof token === "string" && token.startsWith("FLW_SII_SIM_");
+  if (!isSimToken && hasRealFlowCredentials() && flowApiKey && flowSecretKey) {
     try {
       console.log(`[Flow Webhook Confirm] Verifying token ${token} in background...`);
       const payload: Record<string, any> = {
