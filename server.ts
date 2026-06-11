@@ -214,7 +214,7 @@ app.get("/api/flow/simulate-ui", (req, res) => {
           <span class="text-[10px] bg-sky-50 dark:bg-sky-950/40 text-sky-655 text-sky-600 dark:text-sky-400 font-bold px-2.5 py-1 rounded-full border border-sky-100 dark:border-sky-900/50 uppercase tracking-widest block w-max mx-auto">
             Pasarela Webpay Plus 💻
           </span>
-          <h2 class="text-xl font-black text-slate-900 dark:text-white leading-tight">Mente Sana / MindSpace</h2>
+          <h2 class="text-xl font-black text-slate-900 dark:text-white leading-tight">MindSpace</h2>
           <p class="text-xs text-slate-550 dark:text-gray-400">Pagar su consulta de psicoterapia de forma 100% automatizada</p>
         </div>
 
@@ -263,7 +263,7 @@ app.get("/api/flow/simulate-ui", (req, res) => {
         </form>
 
         <p class="text-[9.5px] leading-relaxed text-zinc-400 dark:text-slate-500 font-medium font-sans">
-          Al simular Pago Autorizado, Flow enviará de inmediato el callback seguro POST. El servidor de EloraNotes calculará el Impuesto Boleta de Honorarios vigente para el año 2026 (<strong class="dark:text-slate-400">Retención del 14,5%</strong>), generará el documento oficial LibreDTE simulado y emitirá el reembolso Isapre/Fonasa.
+          Al simular Pago Autorizado, Flow enviará de inmediato el callback seguro POST. El servidor de MindSpace registrará el pago bajo el Impuesto Boleta de Honorarios vigente para el año 2026 (<strong class="dark:text-slate-400">Retención del 14,5%</strong>), generará el documento oficial LibreDTE simulado y emitirá el reembolso Isapre/Fonasa.
         </p>
       </div>
     </body>
@@ -309,12 +309,12 @@ app.post("/api/webhooks/flow", async (req, res) => {
         ${isApproved ? `
           <!-- Approved state badge header -->
           <div class="flex items-center gap-3 border-b dark:border-slate-800 pb-5">
-            <div class="bg-emerald-100 dark:bg-emerald-950/50 text-emerald-600 p-3 rounded-2xl border border-emerald-200 dark:border-emerald-900/50">
-              <span class="text-xl">✅</span>
+            <div class="bg-slate-100 dark:bg-slate-950/50 text-slate-600 dark:text-slate-400 p-3 rounded-2xl border border-slate-200 dark:border-slate-800">
+              <span class="text-xl">✓</span>
             </div>
             <div>
-              <h3 class="text-lg font-black text-slate-900 dark:text-white">Pago Procesado y Aprobado</h3>
-              <p class="text-xs text-rose-600 dark:text-emerald-400 font-extrabold uppercase mt-0.5 tracking-wider">● Boleta de Honorarios Electrónica Emitida</p>
+              <h3 class="text-lg font-extrabold text-slate-700 dark:text-slate-300">Pago Procesado y Aprobado</h3>
+              <p class="text-xs text-slate-500 dark:text-slate-400 font-extrabold uppercase mt-0.5 tracking-wider">● Boleta de Honorarios Electrónica Emitida</p>
             </div>
           </div>
 
@@ -368,8 +368,8 @@ app.post("/api/webhooks/flow", async (req, res) => {
             </div>
           </div>
 
-          <div class="bg-amber-50 dark:bg-amber-950/20 text-[#2e5d42] dark:text-amber-450 p-4 border border-emerald-100 dark:border-amber-900/40 rounded-xl text-[10.5px] leading-relaxed">
-            <strong>✓ Sincronización Exitosa:</strong> Este pago ha sido reportado automáticamente al backend de EloraNotes. El estado del turno de consulta clínico ha cambiado a <strong class="text-emerald-700 dark:text-emerald-400">PAGADO</strong>, y sus datos de reembolso Isapre/Fonasa han sido firmados debidamente.
+          <div class="bg-slate-50 dark:bg-slate-950/30 text-slate-700 dark:text-slate-300 p-4 border border-slate-200 dark:border-slate-800 rounded-xl text-[10.5px] leading-relaxed">
+            <strong>✓ Sincronización Exitosa:</strong> Este pago ha sido reportado automáticamente al backend de MindSpace. El estado del turno de consulta clínico ha cambiado a <strong class="text-slate-900 dark:text-white font-bold">PAGADO</strong>, y sus datos de reembolso Isapre/Fonasa han sido firmados debidamente.
           </div>
 
         ` : `
@@ -397,9 +397,9 @@ app.post("/api/webhooks/flow", async (req, res) => {
           <button 
             type="button"
             onClick="window.close(); if(window.opener) { window.opener.location.reload(); } else { window.location.href = window.location.origin + '/?mode=patient'; }"
-            class="bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs font-extrabold py-3.5 px-6 rounded-xl transition hover:opacity-90 tracking-wide uppercase cursor-pointer"
+            class="bg-slate-600 hover:bg-slate-700 dark:bg-slate-500 dark:hover:bg-slate-600 text-white text-xs font-extrabold py-3.5 px-6 rounded-xl transition hover:opacity-95 tracking-wide uppercase cursor-pointer"
           >
-            ← Volver al Portal de Paciente (EloraNotes)
+            ← Volver al Portal de Paciente (MindSpace)
           </button>
         </div>
       </div>
@@ -501,12 +501,12 @@ app.all("/api/flow/return", async (req, res) => {
         ${isApproved ? `
           <!-- Approved state badge header -->
           <div class="flex items-center gap-3 border-b dark:border-slate-800 pb-5">
-            <div class="bg-teal-50 dark:bg-teal-950/40 text-teal-600 dark:text-teal-400 p-3 rounded-2xl border border-teal-150 dark:border-teal-900/40 shadow-xs">
+            <div class="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 p-3 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xs">
               <span class="text-xl">✓</span>
             </div>
             <div>
-              <h3 class="text-lg font-extrabold text-teal-800 dark:text-teal-300">Pago Recibido Correctamente</h3>
-              <p class="text-xs text-emerald-600 dark:text-emerald-400 font-bold uppercase mt-0.5 tracking-wider">● Registro Clínico Confirmado</p>
+              <h3 class="text-lg font-extrabold text-slate-700 dark:text-slate-300">Pago Recibido Correctamente</h3>
+              <p class="text-xs text-slate-500 dark:text-slate-400 font-bold uppercase mt-0.5 tracking-wider">● Registro Clínico Confirmado</p>
             </div>
           </div>
 
@@ -622,7 +622,7 @@ app.all("/api/flow/return", async (req, res) => {
           <button 
             type="button"
             onClick="window.close(); if(window.opener) { window.opener.location.reload(); } else { window.location.href = window.location.origin + '/?mode=patient'; }"
-            class="bg-teal-700 hover:bg-teal-800 dark:bg-teal-600 dark:hover:bg-teal-700 text-white text-xs font-extrabold py-4 px-6 rounded-xl transition-all shadow-md hover:shadow-lg active:scale-98 tracking-wide uppercase cursor-pointer"
+            class="bg-slate-600 hover:bg-slate-700 dark:bg-slate-500 dark:hover:bg-slate-600 text-white text-xs font-extrabold py-4 px-6 rounded-xl transition-all shadow-md hover:shadow-lg active:scale-98 tracking-wide uppercase cursor-pointer"
           >
             ← Volver al Portal de Paciente (MindSpace)
           </button>
@@ -707,6 +707,62 @@ function getGeminiClient(): GoogleGenAI {
 // REST APIs
 app.get("/api/health", (req, res) => {
   res.json({ status: "healthy", timestamp: new Date().toISOString() });
+});
+
+// ElevenLabs status check
+app.get("/api/elevenlabs/status", (req, res) => {
+  const apiKey = process.env.ELEVENLABS_API_KEY;
+  const isConfigured = !!(apiKey && apiKey !== "YOUR_ELEVENLABS_API_KEY" && apiKey.trim() !== "");
+  res.json({ configured: isConfigured, voiceId: process.env.ELEVENLABS_VOICE_ID || "21m00Tcm4TlvDq8ikWAM" });
+});
+
+// ElevenLabs Pro Premium Text-To-Speech Proxy
+app.post("/api/elevenlabs/tts", async (req, res) => {
+  try {
+    const { text } = req.body;
+    if (!text) {
+      return res.status(400).json({ error: "No text provided for TTS" });
+    }
+
+    const apiKey = process.env.ELEVENLABS_API_KEY;
+    if (!apiKey || apiKey === "YOUR_ELEVENLABS_API_KEY" || apiKey.trim() === "") {
+      return res.status(501).json({ error: "ElevenLabs API key is not configured" });
+    }
+
+    const voiceId = process.env.ELEVENLABS_VOICE_ID || "21m00Tcm4TlvDq8ikWAM"; // Default Rachel
+    
+    console.log(`[ElevenLabs TTS Backend] Generating premium speech with voice ${voiceId}...`);
+    const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
+      method: "POST",
+      headers: {
+        "xi-api-key": apiKey,
+        "Content-Type": "application/json",
+        "accept": "audio/mpeg"
+      },
+      body: JSON.stringify({
+        text: text,
+        model_id: "eleven_multilingual_v2",
+        voice_settings: {
+          stability: 0.5,
+          similarity_boost: 0.75
+        }
+      })
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error("[ElevenLabs API Error]", errText);
+      return res.status(response.status).json({ error: "ElevenLabs API error", details: errText });
+    }
+
+    res.setHeader("Content-Type", "audio/mpeg");
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    res.send(buffer);
+  } catch (error: any) {
+    console.error("ElevenLabs proxy error:", error);
+    res.status(500).json({ error: "TTS generation failure", details: error.message || String(error) });
+  }
 });
 
 // AI session compiler and notes summarizer

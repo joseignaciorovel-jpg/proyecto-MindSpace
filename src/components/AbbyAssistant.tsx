@@ -44,6 +44,23 @@ interface AbbyAssistantProps {
 export default function AbbyAssistant({ mode, therapistUid, therapistName, settings }: AbbyAssistantProps) {
   // Voice & Interaction settings
   const [speechEnabled, setSpeechEnabled] = useState(true);
+  const [elevenLabsConfigured, setElevenLabsConfigured] = useState(false);
+  const [elevenLabsVoiceId, setElevenLabsVoiceId] = useState("");
+  const currentAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Status check for ElevenLabs API
+  useEffect(() => {
+    fetch("/api/elevenlabs/status")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && data.configured) {
+          setElevenLabsConfigured(true);
+          setElevenLabsVoiceId(data.voiceId);
+        }
+      })
+      .catch((err) => console.log("ElevenLabs check failed:", err));
+  }, []);
+
   const [isFaqOpen, setIsFaqOpen] = useState(false);
   const [isActionsOpen, setIsActionsOpen] = useState(false);
   const [isListening, setIsListening] = useState(false);
@@ -180,17 +197,76 @@ export default function AbbyAssistant({ mode, therapistUid, therapistName, setti
     }
   }, [mode, therapistUid]);
 
-  // Handle Speech Synthesis (Abby's voice speaking)
-  const speak = (textToSpeak: string) => {
-    if (!speechEnabled) return;
+  // Stop any active speech generation (both native Web Speech and ElevenLabs stream)
+  const stopSpeaking = () => {
     try {
       window.speechSynthesis.cancel();
-      // Clean string from markdown formatting to avoid weird pronunciation
-      const cleanText = textToSpeak
-        .replace(/[\*\#\_]/g, "")
-        .replace(/:\w+:/g, "")
-        .trim();
+    } catch (e) {}
+    if (currentAudioRef.current) {
+      try {
+        currentAudioRef.current.pause();
+        currentAudioRef.current.currentTime = 0;
+      } catch (e) {}
+    }
+    setIsSpeaking(false);
+  };
 
+  // Handle Speech Synthesis (Abby's voice speaking)
+  const speak = async (textToSpeak: string) => {
+    if (!speechEnabled) return;
+    
+    stopSpeaking();
+    
+    // Clean string from markdown formatting to avoid weird pronunciation
+    const cleanText = textToSpeak
+      .replace(/[\*\#\_]/g, "")
+      .replace(/:\w+:/g, "")
+      .trim();
+
+    if (elevenLabsConfigured) {
+      try {
+        setIsSpeaking(true);
+        const response = await fetch("/api/elevenlabs/tts", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ text: cleanText }),
+        });
+
+        if (response.ok) {
+          const audioBlob = await response.blob();
+          const audioUrl = URL.createObjectURL(audioBlob);
+          const audio = new Audio(audioUrl);
+          currentAudioRef.current = audio;
+
+          audio.onended = () => {
+            setIsSpeaking(false);
+            URL.revokeObjectURL(audioUrl);
+          };
+          audio.onerror = () => {
+            setIsSpeaking(false);
+            URL.revokeObjectURL(audioUrl);
+            speakWithWebSpeech(cleanText);
+          };
+
+          await audio.play();
+          return;
+        } else {
+          console.warn("ElevenLabs returned non-ok status, falling back.");
+        }
+      } catch (e) {
+        console.warn("ElevenLabs synthesis failed, falling back to browser Native TTS", e);
+      }
+    }
+
+    // Fallback to Native browser speech engine
+    speakWithWebSpeech(cleanText);
+  };
+
+  const speakWithWebSpeech = (cleanText: string) => {
+    try {
+      window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(cleanText);
       utterance.lang = "es-CL"; // Warm conversational Chilean-accents accent
       
@@ -224,7 +300,7 @@ export default function AbbyAssistant({ mode, therapistUid, therapistName, setti
   useEffect(() => {
     handsFreeRef.current = handsFreeMode;
     if (handsFreeMode) {
-      window.speechSynthesis.cancel();
+      stopSpeaking();
       try {
         if (recognitionRef.current && !isListening) {
           recognitionRef.current.start();
@@ -301,7 +377,7 @@ export default function AbbyAssistant({ mode, therapistUid, therapistName, setti
     if (isListening) {
       recognitionRef.current.stop();
     } else {
-      window.speechSynthesis.cancel(); // Stop talking first
+      stopSpeaking(); // Stop talking first
       recognitionRef.current.start();
     }
   };
@@ -362,7 +438,7 @@ export default function AbbyAssistant({ mode, therapistUid, therapistName, setti
             <div style="font-family: Arial, sans-serif; max-width: 580px; margin: 0 auto; padding: 25px; border: 1px solid #fee2e2; border-radius: 16px; background-color: #fef2f2;">
               <div style="border-bottom: 2px solid #b91c1c; padding-bottom: 15px; margin-bottom: 20px;">
                 <h2 style="color: #991b1b; margin: 0; font-size: 18px;">⚠️ Aviso de Suspensión de Agenda Clínica</h2>
-                <p style="color: #7f1d1d; margin: 5px 0 0 0; font-size: 11px;">Mente Sana / MindSpace - Asistencia de Abby Admin AI</p>
+                <p style="color: #7f1d1d; margin: 5px 0 0 0; font-size: 11px;">MindSpace - Asistencia de Abby Admin AI</p>
               </div>
               
               <p style="font-size: 13px; color: #1f2937; line-height: 1.6;">
@@ -836,6 +912,11 @@ export default function AbbyAssistant({ mode, therapistUid, therapistName, setti
                   <div className="flex items-center justify-between text-[8px] text-gray-500 pt-1 border-t dark:border-slate-850">
                     <span className="flex items-center gap-1 font-bold">
                       <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" /> Cifrado por Ley 19.628
+                      {speechEnabled && (
+                        <span className="text-[7.5px] font-normal text-slate-500">
+                          {elevenLabsConfigured ? " • Voz HD activa" : " • Voz estándar"}
+                        </span>
+                      )}
                     </span>
                     <button 
                       onClick={() => setSpeechEnabled(!speechEnabled)}
@@ -914,7 +995,7 @@ export default function AbbyAssistant({ mode, therapistUid, therapistName, setti
           <div className="border-t border-slate-850 pt-4 space-y-3">
             {/* Audio Settings Toggles */}
             <div className="flex items-center justify-between text-xs text-slate-400">
-              <span className="font-semibold">Abby Habla</span>
+              <span className="font-semibold font-sans">Abby Habla</span>
               <button
                 onClick={() => setSpeechEnabled(!speechEnabled)}
                 className={`p-1.5 px-3 rounded-lg text-[10px] font-sans font-bold flex items-center gap-1 cursor-pointer transition-all border ${
@@ -927,6 +1008,27 @@ export default function AbbyAssistant({ mode, therapistUid, therapistName, setti
                 {speechEnabled ? "Activado" : "Silenciado"}
               </button>
             </div>
+
+            {speechEnabled && (
+              <div className="text-[10px] bg-slate-900/40 p-2 border border-slate-850 rounded-xl space-y-1">
+                {elevenLabsConfigured ? (
+                  <div className="flex items-center justify-between text-teal-400">
+                    <span className="flex items-center gap-1 font-bold">✨ Abby HD (ElevenLabs)</span>
+                    <span className="text-[8px] bg-teal-500/10 border border-teal-500/30 px-1.5 py-0.5 rounded text-teal-300 font-mono font-bold">ACTIVA</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between text-gray-500">
+                    <span className="flex items-center gap-1">🎙️ Voz Estándar (Nativa)</span>
+                    <span className="text-[8px] bg-slate-800 border border-slate-700 px-1.5 py-0.5 rounded text-gray-400 font-mono" title="Configure su ELEVENLABS_API_KEY en Secrets de AI Studio para activar Voz Ultra-Moderna HD">HD OFF</span>
+                  </div>
+                )}
+                <p className="text-[9px] text-slate-500 leading-normal">
+                  {elevenLabsConfigured 
+                    ? "Utilizando síntesis de voz fotorrealista neuronal multilingüe."
+                    : "Sugerencia: Defina ELEVENLABS_API_KEY para habilitar voces fotorrealistas profesionales de ElevenLabs."}
+                </p>
+              </div>
+            )}
 
             <div className="flex items-center justify-between text-xs text-slate-400">
               <span className="font-semibold">Escuchar con Mic</span>
@@ -1391,6 +1493,11 @@ export default function AbbyAssistant({ mode, therapistUid, therapistName, setti
               <div className="flex items-center justify-between text-[8.5px] text-gray-500 pt-1.5 border-t dark:border-slate-850">
                 <span className="flex items-center gap-1 font-bold">
                   <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" /> Resguardado por Ley HIPAA
+                  {speechEnabled && (
+                    <span className="text-[7.5px] font-normal text-slate-500">
+                      {elevenLabsConfigured ? " • Voz HD" : " • Estándar"}
+                    </span>
+                  )}
                 </span>
                 <button 
                   onClick={() => setSpeechEnabled(!speechEnabled)}

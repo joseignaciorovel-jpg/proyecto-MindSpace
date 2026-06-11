@@ -1073,7 +1073,7 @@ export default function ClinicianSettings({ therapistUid, currentSettings, onSet
                                   <h3 style="color: #065f46; margin-top: 0;">✓ Integración de Gmail Exitosa</h3>
                                   <p style="font-size: 13px; color: #047857;">Esta es una prueba de conexión directa con la API segura de Gmail para MindSpace.</p>
                                   <hr style="border: none; border-top: 1px solid #a7f3d0;" />
-                                  <p style="font-size: 11px; color: #065f46; margin-bottom: 0;">Sistema de Clínicas Privadas EloraNotes - 2026</p>
+                                  <p style="font-size: 11px; color: #065f46; margin-bottom: 0;">Sistema de Clínicas Privadas MindSpace - 2026</p>
                                 </div>
                               `;
                               const success = await sendGmail(gmailToken, contactEmail || "joseignacio.rovel@gmail.com", "Prueba de Integración Gmail ✅ - MindSpace", testBody);

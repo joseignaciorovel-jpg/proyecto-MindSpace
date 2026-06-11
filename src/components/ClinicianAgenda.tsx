@@ -478,7 +478,7 @@ export default function ClinicianAgenda({ therapistUid, onJoinCall }: ClinicianA
           <div style="font-family: Arial, sans-serif; max-width: 580px; margin: 0 auto; padding: 25px; border: 1px solid #fee2e2; border-radius: 16px; background-color: #fef2f2;">
             <div style="border-bottom: 2px solid #b91c1c; padding-bottom: 15px; margin-bottom: 20px;">
               <h2 style="color: #991b1b; margin: 0; font-size: 18px;">⚠️ Aviso de Suspensión de Agenda Clínica</h2>
-              <p style="color: #7f1d1d; margin: 5px 0 0 0; font-size: 11px;">Mente Sana / MindSpace - Consulta Médica</p>
+              <p style="color: #7f1d1d; margin: 5px 0 0 0; font-size: 11px;">MindSpace - Consulta Médica</p>
             </div>
             
             <p style="font-size: 13px; color: #1f2937; line-height: 1.6;">

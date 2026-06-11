@@ -111,12 +111,12 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // Timer interval for review auto-carousel slide transition
+  // Timer interval for review auto-carousel slide transition (Increased to 14s for better readability as requested)
   useEffect(() => {
     if (publicReviews.length <= 1) return;
     const interval = setInterval(() => {
       setActiveReviewIdx((prev) => (prev + 1) % publicReviews.length);
-    }, 6000);
+    }, 14000);
     return () => clearInterval(interval);
   }, [publicReviews.length]);
 

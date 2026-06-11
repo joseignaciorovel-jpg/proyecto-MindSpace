@@ -305,7 +305,7 @@ export default function BookingCalendar({
               <div style="font-family: Arial, sans-serif; max-width: 580px; margin: 0 auto; padding: 25px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #f8fafc;">
                 <div style="border-bottom: 2px solid #0f172a; padding-bottom: 15px; margin-bottom: 20px;">
                   <h2 style="color: #0f172a; margin: 0; font-size: 18px;">📅 Su Reserva ha sido Registrada con Éxito</h2>
-                  <p style="color: #64748b; margin: 5px 0 0 0; font-size: 11px;">Mente Sana / MindSpace - Consulta Profesional</p>
+                  <p style="color: #64748b; margin: 5px 0 0 0; font-size: 11px;">MindSpace - Consulta Profesional</p>
                 </div>
                 
                 <p style="font-size: 13px; color: #1e293b; line-height: 1.6;">

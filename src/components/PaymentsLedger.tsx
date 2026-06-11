@@ -126,7 +126,7 @@ export default function PaymentsLedger({ therapistUid }: PaymentsLedgerProps) {
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 25px; border: 1px solid #e5e7eb; border-radius: 16px; background-color: #fafafa;">
         <div style="border-bottom: 2px solid #0f172a; padding-bottom: 15px; margin-bottom: 20px;">
           <h2 style="color: #0f172a; margin: 0; font-size: 20px;">Reporte de Facturación Mensual</h2>
-          <p style="color: #6b7280; margin: 5px 0 0 0; font-size: 11px;">Mente Sana / MindSpace - Chile 2026</p>
+          <p style="color: #6b7280; margin: 5px 0 0 0; font-size: 11px;">MindSpace - Chile 2026</p>
         </div>
         
         <div style="margin-bottom: 20px; font-size: 13px; line-height: 1.6; color: #374151;">
