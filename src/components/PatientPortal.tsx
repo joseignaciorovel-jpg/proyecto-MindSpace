@@ -520,6 +520,102 @@ export default function PatientPortal({ therapistUid, therapistName, sessionPric
     };
   }, [hasAccess, patientRut, patientEmail, therapistUid]);
 
+  // Auto-provision patient profile in the main "patients" collection if they don't have one
+  useEffect(() => {
+    if (!hasAccess || !patientRut || !patientEmail || !therapistUid) return;
+
+    const autoProvision = async () => {
+      try {
+        const normalizedRut = patientRut.trim().replace(/\./g, "").replace(/\-/g, "").toLowerCase();
+        
+        // Check if patient document exists in main collection
+        const patientsRef = collection(db, "patients");
+        const qRut = query(patientsRef, where("rut", "==", patientRut.trim().toLowerCase()));
+        const qRut2 = query(patientsRef, where("rut", "==", normalizedRut));
+        const qEmail = query(patientsRef, where("email", "==", patientEmail.trim().toLowerCase()));
+        
+        const [snapRut, snapRut2, snapEmail] = await Promise.all([
+          getDocs(qRut),
+          getDocs(qRut2),
+          getDocs(qEmail)
+        ]);
+
+        let patientDocExists = !snapRut.empty || !snapRut2.empty || !snapEmail.empty;
+        
+        if (!patientDocExists) {
+          // Patient does not exist in patients list yet! Let's auto-create it.
+          // Discover their registered name from their appointments or name split of email
+          let foundName = "";
+          let foundPhone = "No provisto";
+          
+          if (appointments && appointments.length > 0) {
+            const matchApp = appointments.find(
+              (a) => a.patientName && a.patientName.trim().length > 0
+            );
+            if (matchApp) {
+              foundName = matchApp.patientName;
+              if (matchApp.patientPhone) foundPhone = matchApp.patientPhone;
+            }
+          }
+          
+          if (!foundName) {
+            const apptsRef = collection(db, "appointments");
+            const qApps = query(apptsRef, where("patientRut", "==", normalizedRut));
+            const snapApps = await getDocs(qApps);
+            if (!snapApps.empty) {
+              const matched = snapApps.docs.find(d => d.data().patientName);
+              if (matched) {
+                foundName = matched.data().patientName;
+                if (matched.data().patientPhone) foundPhone = matched.data().patientPhone;
+              }
+            } else {
+              const qAppsRaw = query(apptsRef, where("patientRut", "==", patientRut.trim().toLowerCase()));
+              const snapAppsRaw = await getDocs(qAppsRaw);
+              if (!snapAppsRaw.empty) {
+                const matched = snapAppsRaw.docs.find(d => d.data().patientName);
+                if (matched) {
+                  foundName = matched.data().patientName;
+                  if (matched.data().patientPhone) foundPhone = matched.data().patientPhone;
+                }
+              }
+            }
+          }
+
+          // Fallback name capitalizing the email prefix (e.g., "sofia.hauva" -> "Sofia Hauva")
+          if (!foundName) {
+            const emailPrefix = patientEmail.split("@")[0] || "Paciente";
+            foundName = emailPrefix
+              .split(/[._-]/)
+              .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+              .join(" ");
+          }
+
+          const newPatientId = "pat_" + Math.random().toString(36).substring(2, 11);
+          const newPatientRef = doc(db, "patients", newPatientId);
+
+          const patientDocData = {
+            id: newPatientId,
+            name: foundName,
+            email: patientEmail.trim().toLowerCase(),
+            phone: foundPhone,
+            rut: patientRut.trim().toLowerCase(),
+            consentLawAccepted: true,
+            consentTimestamp: Timestamp.now(),
+            createdAt: Timestamp.now(),
+            ownerId: therapistUid
+          };
+
+          await setDoc(newPatientRef, patientDocData);
+          console.log("Auto-provisioned patient document in patients collection:", patientDocData);
+        }
+      } catch (err) {
+        console.warn("Could not auto-provision patient document:", err);
+      }
+    };
+
+    autoProvision();
+  }, [hasAccess, patientRut, patientEmail, therapistUid, appointments]);
+
   // Handle Sync Button Submission
   const handleValidateIdentify = (e: React.FormEvent) => {
     e.preventDefault();

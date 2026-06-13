@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { collection, query, where, onSnapshot, doc, setDoc, addDoc, updateDoc, Timestamp, orderBy } from "firebase/firestore";
+import { collection, query, where, onSnapshot, doc, setDoc, addDoc, updateDoc, Timestamp, orderBy, getDocs } from "firebase/firestore";
 import { db, handleFirestoreError, OperationType } from "../firebase";
 import { Patient, HistoryRecord } from "../types";
 import { UserPlus, BookOpen, Clock, Activity, FileText, Sparkles, Plus, CheckCircle, Search, HelpCircle, FileCheck2, Calendar, Shield, Eye, ShieldAlert, Share2, Star, Trash2, Bold, Underline, Type, Mic, MicOff, Smile, Moon } from "lucide-react";
@@ -755,6 +755,94 @@ ${therapistName || "Psicólogo/a Tratante"}`;
 
     return () => unsubscribe();
   }, [therapistUid]);
+
+  // 1.5. Auto-sync unregistered patients who booked sessions or wrote mood journals
+  useEffect(() => {
+    if (!therapistUid || loadingPatients || patients.length === 0) return;
+
+    const syncExternalPatients = async () => {
+      try {
+        // Find all unique patient emails/ruts from mood journals and appointments
+        const [moodSnap, apptSnap] = await Promise.all([
+          getDocs(query(collection(db, "mood_journals"), where("ownerId", "==", therapistUid))),
+          getDocs(query(collection(db, "appointments"), where("ownerId", "==", therapistUid)))
+        ]);
+
+        const externalPatientsMap: { [key: string]: { name: string; email: string; phone: string; rut: string } } = {};
+
+        // Parse mood journals
+        moodSnap.forEach((docSnap) => {
+          const data = docSnap.data();
+          const pRut = (data.patientRut || "").trim().toLowerCase();
+          const pEmail = (data.patientEmail || "").trim().toLowerCase();
+          if (pRut && pEmail) {
+            const key = pRut;
+            if (!externalPatientsMap[key]) {
+              externalPatientsMap[key] = {
+                name: data.patientName || pEmail.split("@")[0],
+                email: pEmail,
+                phone: "No provisto",
+                rut: data.patientRut,
+              };
+            }
+          }
+        });
+
+        // Parse appointments
+        apptSnap.forEach((docSnap) => {
+          const data = docSnap.data();
+          const pRut = (data.patientRut || "").trim().toLowerCase();
+          const pEmail = (data.patientEmail || "").trim().toLowerCase();
+          if (pRut && pEmail) {
+            const key = pRut;
+            // Appointments take precedence for naming / phone since they are more reliable
+            externalPatientsMap[key] = {
+              name: data.patientName || (externalPatientsMap[key]?.name) || pEmail.split("@")[0],
+              email: pEmail,
+              phone: data.patientPhone || (externalPatientsMap[key]?.phone) || "No provisto",
+              rut: data.patientRut || pRut,
+            };
+          }
+        });
+
+        // Compare with existing patients profiles
+        const existingRuts = new Set(patients.map(p => p.rut.trim().replace(/\./g, "").replace(/\-/g, "").toLowerCase()));
+        const existingEmails = new Set(patients.map(p => p.email.trim().toLowerCase()));
+
+        for (const [keyRut, extPatient] of Object.entries(externalPatientsMap)) {
+          const normExtRut = keyRut.replace(/\./g, "").replace(/\-/g, "").toLowerCase();
+          const normExtEmail = extPatient.email.toLowerCase();
+
+          // If this patient is not currently registered in our dashboard folder/file list
+          if (!existingRuts.has(normExtRut) && !existingEmails.has(normExtEmail)) {
+            // Auto provision profile right now!
+            const newPatientId = "pat_" + Math.random().toString(36).substring(2, 11);
+            const newPatientRef = doc(db, "patients", newPatientId);
+
+            const newPatientData: Patient = {
+              id: newPatientId,
+              name: extPatient.name,
+              email: extPatient.email,
+              phone: extPatient.phone,
+              rut: extPatient.rut,
+              consentLawAccepted: true,
+              consentTimestamp: Timestamp.now(),
+              createdAt: Timestamp.now(),
+              ownerId: therapistUid
+            };
+
+            await setDoc(newPatientRef, newPatientData);
+            console.log("Auto-synchronized and created missing patient profile:", newPatientData);
+          }
+        }
+      } catch (err) {
+        console.warn("Could not auto-sync missing patient records:", err);
+      }
+    };
+
+    // Run background sync check
+    syncExternalPatients();
+  }, [therapistUid, loadingPatients, patients.length]);
 
   // 2. Fetch histories records for the selected patient
   useEffect(() => {
@@ -2454,8 +2542,29 @@ ${therapistName || "Psicólogo/a Tratante"}`;
                   <div className="h-20 bg-slate-50 rounded-lg animate-pulse"></div>
                 </div>
               ) : historyRecords.length === 0 ? (
-                <div className="text-center py-10 bg-slate-50/50 rounded-2xl border border-slate-100 text-xs text-gray-400 italic">
-                  No hay sesiones previas registradas para este paciente. Use el formulario superior para crear la primera.
+                <div className="space-y-4 font-sans text-left">
+                  <div className="p-5 rounded-2xl bg-indigo-50/50 dark:bg-slate-900 border border-indigo-100 dark:border-slate-800 text-slate-800 dark:text-slate-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                    <div className="space-y-1.5 text-left">
+                      <div className="flex items-center gap-1.5 font-bold text-indigo-950 dark:text-indigo-400 text-sm">
+                        <span className="w-2.5 h-2.5 bg-indigo-500 rounded-full animate-ping shrink-0" />
+                        <span>Paciente recientemente registrada a través del Portal</span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 dark:text-gray-400 leading-relaxed max-w-2xl">
+                        {selectedPatient?.rut ? `RUT: ${selectedPatient.rut}. ` : ""}
+                        Esta paciente se ha registrado autónomamente en el Portal de Pacientes. **No registra evolución clínica escrita ni consultas grabadas todavía** al ser una ficha nueva, pero puedes ver toda la sincronización de sus reportes de temperamento, horas de sueño y diario cognitivo de pensamientos ingresados.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setActiveSessionSubTab("cbt_diary")}
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px] px-4 py-2 rounded-xl shrink-0 cursor-pointer transition-all active:scale-95 shadow-sm inline-flex items-center gap-1.5"
+                    >
+                      📊 Ver Diario de Ánimo & Sueño
+                    </button>
+                  </div>
+                  <div className="text-center py-6 bg-slate-50/50 dark:bg-slate-950 rounded-2xl border border-slate-100 dark:border-slate-850 text-xs text-gray-400 italic">
+                    Sin intervenciones ni notas registradas de terapia en esta plataforma aún. Use el panel "📝 Notas" superior para crear la primera evolución del paciente.
+                  </div>
                 </div>
               ) : (
                 <div className="space-y-4 max-h-[500px] overflow-y-auto pr-1">
