@@ -915,6 +915,28 @@ export default function PatientPortal({ therapistUid, therapistName, sessionPric
               </div>
             </div>
 
+            <div className="bg-amber-500/10 border border-amber-500/20 p-3 rounded-xl text-[10px] leading-relaxed text-amber-800 dark:text-amber-400 flex items-start gap-2.5">
+              <span className="text-sm">⚠️</span>
+              <div>
+                <strong>Responsabilidad en Custodia de Datos de Acceso:</strong>
+                <p className="mt-0.5 text-[9px] text-[#5d462e] dark:text-amber-350 leading-relaxed">
+                  El ingreso mediante RUT y correo electrónico es de carácter estrictamente personal. Es responsabilidad única del paciente la reserva de sus datos. Al continuar, usted asume voluntariamente el resguardo y certifica que no los divulgará, liberando al profesional y a la plataforma de toda responsabilidad derivada de su mal uso, pérdida o acceso no autorizado por terceros.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-2 bg-slate-50 dark:bg-slate-950 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800">
+              <input
+                required
+                type="checkbox"
+                id="acceptDisclaimer"
+                className="mt-0.5 h-3.5 w-3.5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+              />
+              <label htmlFor="acceptDisclaimer" className="text-[10px] text-slate-500 dark:text-slate-400 leading-normal select-none cursor-pointer">
+                Comprendo y acepto mi responsabilidad personal en el resguardo de mis credenciales de acceso.
+              </label>
+            </div>
+
             <button
               type="submit"
               disabled={isSyncing}

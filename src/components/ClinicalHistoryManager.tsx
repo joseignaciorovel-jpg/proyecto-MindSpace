@@ -274,17 +274,17 @@ ${therapistName || "Psicólogo/a Tratante"}`;
   const [gad7Answers, setGad7Answers] = useState<number[]>([0, 0, 0, 0, 0, 0, 0]);
   const [cssrsAnswers, setCssrsAnswers] = useState<boolean[]>([false, false, false, false, false]);
 
-  const [isDigitalSignatureChecked, setIsDigitalSignatureChecked] = useState(false);
+  const [isDigitalSignatureChecked, setIsDigitalSignatureChecked] = useState(true);
   const [signatureModalOpen, setSignatureModalOpen] = useState(false);
   const [signatureName, setSignatureName] = useState(() => {
     try {
-      return localStorage.getItem("mindspace_therapist_fullname") || "";
-    } catch { return ""; }
+      return localStorage.getItem("mindspace_therapist_fullname") || "Jose Romero Velásquez";
+    } catch { return "Jose Romero Velásquez"; }
   });
   const [signatureDoc, setSignatureDoc] = useState(() => {
     try {
-      return localStorage.getItem("mindspace_therapist_sis_number") || "";
-    } catch { return ""; }
+      return localStorage.getItem("mindspace_therapist_sis_number") || "821935";
+    } catch { return "821935"; }
   });
   const [signaturePin, setSignaturePin] = useState("");
   const [activeRecordToSign, setActiveRecordToSign] = useState<HistoryRecord | null>(null);
@@ -2713,11 +2713,24 @@ ${therapistName || "Psicólogo/a Tratante"}`;
                   </div>
                 </div>
 
-                <div className="flex justify-end pt-2 border-t border-slate-100">
+                <div className="flex flex-col sm:flex-row justify-between items-center gap-3 pt-2 border-t border-slate-100">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="isDigitalSignatureChecked"
+                      checked={isDigitalSignatureChecked}
+                      onChange={(e) => setIsDigitalSignatureChecked(e.target.checked)}
+                      className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500 cursor-pointer"
+                    />
+                    <label htmlFor="isDigitalSignatureChecked" className="text-xs font-bold text-slate-700 cursor-pointer select-none flex items-center gap-1">
+                      🔐 Firmar evolución digitalmente antes de archivar (Cierre Ley 19.799)
+                    </label>
+                  </div>
+
                   <button
                     type="submit"
                     disabled={savingRecord}
-                    className="bg-slate-900 border border-slate-950 text-white rounded-xl px-5 py-2.5 text-xs font-semibold hover:bg-slate-800 transition-all shadow-md flex items-center gap-1.5"
+                    className="bg-slate-900 border border-slate-950 text-white rounded-xl px-5 py-2.5 text-xs font-semibold hover:bg-slate-800 transition-all shadow-md flex items-center gap-1.5 w-full sm:w-auto justify-center"
                   >
                     <FileCheck2 className="w-4 h-4" /> {savingRecord ? "Guardando Sesión..." : "Guardar Nota en Historia Clínica"}
                   </button>
@@ -3021,6 +3034,101 @@ ${therapistName || "Psicólogo/a Tratante"}`;
                   className="bg-slate-900 text-white px-4 py-2 rounded-xl hover:bg-slate-800 font-semibold transition-all shadow-sm"
                 >
                   Crear y Asociar
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {signatureModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-[110] p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl p-6 max-w-md w-full border border-gray-150 shadow-2xl space-y-4 text-left">
+            <div className="flex justify-between items-center bg-amber-50 text-amber-900 p-3 rounded-xl border border-amber-200">
+              <div className="flex items-center gap-1.5 font-bold text-xs uppercase tracking-tight">
+                <Shield className="w-4 h-4 text-amber-600 animate-pulse duration-1000" />
+                Validación de Autoridad & Firma Electrónica
+              </div>
+              <button 
+                type="button" 
+                onClick={() => {
+                  setSignatureModalOpen(false);
+                  setSignaturePin("");
+                }}
+                className="text-gray-400 hover:text-gray-700 text-xs font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-[11px] text-gray-500 leading-relaxed">
+              De acuerdo con la <strong>Ley 19.799 sobre Firma Electrónica</strong> y la <strong>Ley 20.584 de Derechos y Deberes del Paciente en Chile</strong>, los evolutivos y notas de historia clínica deben estar autenticados digitalmente por el psicólogo tratante para asegurar la integridad clínica ante de auditorías técnicas.
+            </p>
+
+            <form onSubmit={handleValidateAndSignSubmit} className="space-y-4 text-left">
+              <div className="bg-slate-50 border border-slate-200 p-3 rounded-2xl text-xs space-y-1.5 shadow-xs">
+                <div className="flex justify-between items-center text-slate-600">
+                  <span>Psicoterapeuta Firmante:</span>
+                  <span className="font-bold text-slate-900">{signatureName}</span>
+                </div>
+                <div className="flex justify-between items-center text-slate-600">
+                  <span>Registro Clínico (SIS):</span>
+                  <span className="font-bold font-mono text-slate-900">{signatureDoc}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const newName = prompt("Modificar Nombre Completo del Profesional:", signatureName);
+                    if (newName !== null && newName.trim() !== "") {
+                      setSignatureName(newName.trim());
+                      localStorage.setItem("mindspace_therapist_fullname", newName.trim());
+                    }
+                    const newSis = prompt("Modificar N° Registro SIS:", signatureDoc);
+                    if (newSis !== null && newSis.trim() !== "") {
+                      setSignatureDoc(newSis.trim());
+                      localStorage.setItem("mindspace_therapist_sis_number", newSis.trim());
+                    }
+                  }}
+                  className="text-[10px] text-amber-700 hover:text-amber-800 underline block text-right w-full pt-1 cursor-pointer"
+                >
+                  ✏️ Modificar credenciales guardadas
+                </button>
+              </div>
+
+              <div className="space-y-1 text-xs">
+                <label className="block text-gray-600 font-bold">PIN de Seguridad Clínico (Autoridad)</label>
+                <input
+                  type="password"
+                  required
+                  placeholder="Ingrese PIN (Ej: 1234 o 2026)"
+                  value={signaturePin}
+                  onChange={(e) => setSignaturePin(e.target.value)}
+                  className="w-full p-2.5 rounded-xl border border-gray-250 bg-white text-center font-mono font-bold text-sm tracking-widest focus:outline-none focus:ring-1 focus:ring-slate-900"
+                />
+              </div>
+
+              <div className="bg-slate-50 p-2.5 rounded-xl text-[9.5px] text-slate-500 flex items-start gap-1.5 leading-relaxed">
+                <span>📢</span>
+                <div>
+                  <strong>Nota de Seguridad:</strong> Este PIN de {signaturePin ? "●●●●" : "4 dígitos"} autentica su autoría y firma digital simple (Ley 19.799) sobre la ficha clínica antes de archivarla.
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t text-xs">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSignatureModalOpen(false);
+                    setSignaturePin("");
+                  }}
+                  className="px-3.5 py-2 border rounded-xl hover:bg-slate-50 font-semibold cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-xl font-bold transition-all shadow-sm flex items-center gap-1 cursor-pointer"
+                >
+                  ⚡ Validar y Firmar Documento
                 </button>
               </div>
             </form>
