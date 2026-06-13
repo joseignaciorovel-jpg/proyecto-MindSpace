@@ -32,13 +32,19 @@ service cloud.firestore {
 
     // 3. Schema validators - Explicit keys length and types matching the blueprint
     function isValidPatient(data) {
-      return data.keys().hasAll(['id', 'name', 'email', 'phone', 'createdAt', 'ownerId']) && data.keys().size() == 6
+      return data.keys().hasAll(['id', 'name', 'email', 'phone', 'createdAt', 'ownerId']) 
+          && data.keys().size() >= 6 && data.keys().size() <= 11
           && data.id is string && data.id.size() <= 128
           && data.name is string && data.name.size() > 0 && data.name.size() <= 128
           && data.email is string && data.email.size() > 0 && data.email.size() <= 128
           && data.phone is string && data.phone.size() <= 64
           && data.ownerId is string && data.ownerId.size() <= 128
-          && data.createdAt is timestamp;
+          && data.createdAt is timestamp
+          && (!data.keys().hasAny(['rut']) || (data.rut is string && data.rut.size() <= 64))
+          && (!data.keys().hasAny(['consentLawAccepted']) || (data.consentLawAccepted is bool))
+          && (!data.keys().hasAny(['consentTimestamp']) || (data.consentTimestamp is timestamp))
+          && (!data.keys().hasAny(['clinicalCriticalRisk']) || (data.clinicalCriticalRisk is string && data.clinicalCriticalRisk.size() <= 32))
+          && (!data.keys().hasAny(['criticalAlertDetail']) || (data.criticalAlertDetail is string && data.criticalAlertDetail.size() <= 1024));
     }
 
     function isValidAppointment(data) {

@@ -758,7 +758,7 @@ ${therapistName || "Psicólogo/a Tratante"}`;
 
   // 1.5. Auto-sync unregistered patients who booked sessions or wrote mood journals
   useEffect(() => {
-    if (!therapistUid || loadingPatients || patients.length === 0) return;
+    if (!therapistUid || loadingPatients) return;
 
     const syncExternalPatients = async () => {
       try {
@@ -842,7 +842,7 @@ ${therapistName || "Psicólogo/a Tratante"}`;
 
     // Run background sync check
     syncExternalPatients();
-  }, [therapistUid, loadingPatients, patients.length]);
+  }, [therapistUid, loadingPatients, patients]);
 
   // 2. Fetch histories records for the selected patient
   useEffect(() => {
@@ -1132,7 +1132,8 @@ ${therapistName || "Psicólogo/a Tratante"}`;
   // Filter list of patients
   const filteredPatients = patients.filter((p) =>
     p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    p.email.toLowerCase().includes(searchTerm.toLowerCase())
+    p.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (p.rut && p.rut.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   return (
