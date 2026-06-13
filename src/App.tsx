@@ -124,10 +124,17 @@ export default function App() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const mode = params.get("mode");
+    const portal = params.get("portal");
     const pId = params.get("patientId");
     const tId = params.get("therapistId");
     const tName = params.get("therapistName");
     const pName = params.get("patientName");
+    
+    // Auto launch patient companion mode if defined in query strings
+    if (portal === "patient" || mode === "patient") {
+      setPortalMode("patient");
+    }
+
     if (mode === "review" && tId) {
       setReviewFormState({
         isActive: true,

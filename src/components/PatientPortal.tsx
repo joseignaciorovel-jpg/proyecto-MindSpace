@@ -380,8 +380,42 @@ export default function PatientPortal({ therapistUid, therapistName, sessionPric
     }
   };
 
-  // Checks for credential cache
+  // Checks for credential cache and URL query parameter pre-population
   useEffect(() => {
+    // 1. First, check URL parameters for pre-filling / smart auto-login
+    const params = new URLSearchParams(window.location.search);
+    const rutParam = params.get("rut");
+    const emailParam = params.get("email");
+
+    if (rutParam || emailParam) {
+      const cleanRut = (rutParam || "").trim();
+      const cleanEmail = (emailParam || "").trim();
+      
+      if (cleanRut) setPatientRut(cleanRut);
+      if (cleanEmail) setPatientEmail(cleanEmail);
+
+      if (cleanRut && cleanEmail) {
+        localStorage.setItem(
+          "mindspace_patient_credentials",
+          JSON.stringify({
+            rut: cleanRut.toLowerCase(),
+            email: cleanEmail.toLowerCase(),
+          })
+        );
+        setHasAccess(true);
+
+        // Clean query parameters from URL for a sleek, secure browser history
+        try {
+          const nextUrl = window.location.pathname + "?portal=patient";
+          window.history.replaceState({}, document.title, nextUrl);
+        } catch (e) {
+          console.warn("Unable to rewrite state URL cleanly:", e);
+        }
+        return;
+      }
+    }
+
+    // 2. Fallback to localStorage cache
     const cached = localStorage.getItem("mindspace_patient_credentials");
     if (cached) {
       try {

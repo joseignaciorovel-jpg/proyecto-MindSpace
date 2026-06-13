@@ -17,6 +17,7 @@ export default function ClinicalHistoryManager({ therapistUid, therapistName }: 
 
   // Feedback evaluations integration
   const [copiedReviewLink, setCopiedReviewLink] = useState(false);
+  const [copiedPortalLink, setCopiedPortalLink] = useState(false);
   const [receivedReviews, setReceivedReviews] = useState<any[]>([]);
   const [loadingReviews, setLoadingReviews] = useState(true);
 
@@ -56,6 +57,27 @@ export default function ClinicalHistoryManager({ therapistUid, therapistName }: 
       .catch((err) => {
         console.error("No se pudo copiar el enlace:", err);
         alert(`Aquí está el enlace para enviar por WhatsApp: ${url}`);
+      });
+  };
+
+  const handleCopyPatientPortalLink = () => {
+    if (!selectedPatient) return;
+    const productionOrigin = "https://proyecto-mindspace-597030236952.southamerica-west1.run.app";
+    const cleanRut = (selectedPatient.rut || "").trim();
+    const cleanEmail = (selectedPatient.email || "").trim();
+    
+    // Auto login deep link
+    const url = `${productionOrigin}?portal=patient${cleanRut ? `&rut=${encodeURIComponent(cleanRut)}` : ""}${cleanEmail ? `&email=${encodeURIComponent(cleanEmail)}` : ""}`;
+    const txt = `Hola ${selectedPatient.name}, te comparto el link de tu Portal de Paciente Seguro en MindSpace para registrar tus horas de sueño, reportes clínicos y ver tus citas:\n\n${url}\n\n(Ingresarás de forma automática al hacer clic).`;
+    
+    navigator.clipboard.writeText(txt)
+      .then(() => {
+        setCopiedPortalLink(true);
+        setTimeout(() => setCopiedPortalLink(false), 3000);
+      })
+      .catch((err) => {
+        console.error("No se pudo copiar el portal link:", err);
+        alert(`Aquí está el texto para enviar por WhatsApp: ${txt}`);
       });
   };
 
@@ -1047,7 +1069,7 @@ ${therapistName || "Psicólogo/a Tratante"}`;
             placeholder="Buscar por nombre o correo..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-9 w-full rounded-xl border border-gray-200 p-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-slate-900 transition-all"
+            className="pl-9 w-full rounded-xl border border-gray-200 dark:border-slate-800 p-2.5 text-xs text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-900/60 placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-900 transition-all"
           />
         </div>
 
@@ -1061,7 +1083,7 @@ ${therapistName || "Psicólogo/a Tratante"}`;
               placeholder="Nombre y Apellidos"
               value={newPatientName}
               onChange={(e) => setNewPatientName(e.target.value)}
-              className="w-full rounded-lg border border-gray-200 p-2 bg-white text-xs"
+              className="w-full rounded-lg border border-gray-200 dark:border-slate-800 p-2 bg-white dark:bg-slate-900/60 text-slate-900 dark:text-slate-100 text-xs placeholder:text-gray-400"
             />
             <input
               type="text"
@@ -1069,7 +1091,7 @@ ${therapistName || "Psicólogo/a Tratante"}`;
               placeholder="RUT (ej: 12.345.678-K)"
               value={newPatientRut}
               onChange={(e) => setNewPatientRut(e.target.value)}
-              className="w-full rounded-lg border border-gray-200 p-2 bg-white text-xs font-mono"
+              className="w-full rounded-lg border border-gray-200 dark:border-slate-800 p-2 bg-white dark:bg-slate-900/60 text-slate-900 dark:text-slate-100 text-xs font-mono placeholder:text-gray-400"
             />
             <input
               type="email"
@@ -1077,14 +1099,14 @@ ${therapistName || "Psicólogo/a Tratante"}`;
               placeholder="Correo electrónico"
               value={newPatientEmail}
               onChange={(e) => setNewPatientEmail(e.target.value)}
-              className="w-full rounded-lg border border-gray-200 p-2 bg-white text-xs"
+              className="w-full rounded-lg border border-gray-200 dark:border-slate-800 p-2 bg-white dark:bg-slate-900/60 text-slate-900 dark:text-slate-100 text-xs placeholder:text-gray-400"
             />
             <input
               type="tel"
               placeholder="Celular (Remitente WhatsApp)"
               value={newPatientPhone}
               onChange={(e) => setNewPatientPhone(e.target.value)}
-              className="w-full rounded-lg border border-gray-200 p-2 bg-white text-xs"
+              className="w-full rounded-lg border border-gray-200 dark:border-slate-800 p-2 bg-white dark:bg-slate-900/60 text-slate-900 dark:text-slate-100 text-xs placeholder:text-gray-400"
             />
             
             <div className="flex items-start gap-1.5 pt-1">
@@ -1206,6 +1228,24 @@ ${therapistName || "Psicólogo/a Tratante"}`;
                       <>
                         <Share2 className="w-3.5 h-3.5" />
                         <span>Solicitar Reseña</span>
+                      </>
+                    )}
+                  </button>
+                  <button
+                    onClick={handleCopyPatientPortalLink}
+                    type="button"
+                    className="bg-slate-850 hover:bg-slate-800 text-indigo-400 border border-slate-700 hover:border-indigo-500/30 text-[10.5px] font-bold px-3 py-1.5 rounded-xl inline-flex items-center gap-1 cursor-pointer transition-all active:scale-95 shadow-sm"
+                    title="Copiar invitación segura de acceso directo al Portal de Pacientes"
+                  >
+                    {copiedPortalLink ? (
+                      <>
+                        <CheckCircle className="w-3.5 h-3.5 text-indigo-400 animate-pulse" />
+                        <span>¡Invitación Copiada!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Smile className="w-3.5 h-3.5 text-indigo-400" />
+                        <span>Invitar a Portal 🔐</span>
                       </>
                     )}
                   </button>
