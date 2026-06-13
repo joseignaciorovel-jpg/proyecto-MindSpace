@@ -145,6 +145,17 @@ export default function ClinicalHistoryManager({ therapistUid, therapistName }: 
   const [customDocContent, setCustomDocContent] = useState("");
   const [isCopiedDoc, setIsCopiedDoc] = useState(false);
 
+  // ==========================================
+  // INNER EVOLUTION MODE AND DETAIL MODALS
+  // ==========================================
+  const [evolutionTabMode, setEvolutionTabMode] = useState<"view" | "create">("view");
+  const [selectedRecordForDetail, setSelectedRecordForDetail] = useState<HistoryRecord | null>(null);
+  const [selectedRecordForEdit, setSelectedRecordForEdit] = useState<HistoryRecord | null>(null);
+  const [appendedNotesText, setAppendedNotesText] = useState("");
+  const [isSavingAppendedNotes, setIsSavingAppendedNotes] = useState(false);
+  const [isQualityControlOpen, setIsQualityControlOpen] = useState(false);
+  const [proSignatureInput, setProSignatureInput] = useState("");
+
   // Helper template generator to protect patient details (Privacy Law 19.628 / HIPAA)
   const generateTemplateContent = (templateType: "attendance" | "evolution" | "discharge", anonymize: boolean) => {
     const todayStr = new Date().toLocaleDateString("es-CL");
@@ -756,16 +767,17 @@ ${therapistName || "Psicólogo/a Tratante"}`;
     return () => unsubscribe();
   }, [therapistUid]);
 
-  // 1.5. Auto-sync unregistered patients who booked sessions or wrote mood journals
+  // 1.5. Auto-sync unregistered patients who booked sessions or wrote mood journals (Decoupled to prevent flickering)
   useEffect(() => {
     if (!therapistUid || loadingPatients) return;
 
     const syncExternalPatients = async () => {
       try {
-        // Find all unique patient emails/ruts from mood journals and appointments
-        const [moodSnap, apptSnap] = await Promise.all([
+        // Find all unique patient emails/ruts from mood journals, appointments, and registered patients
+        const [moodSnap, apptSnap, ptsSnap] = await Promise.all([
           getDocs(query(collection(db, "mood_journals"), where("ownerId", "==", therapistUid))),
-          getDocs(query(collection(db, "appointments"), where("ownerId", "==", therapistUid)))
+          getDocs(query(collection(db, "appointments"), where("ownerId", "==", therapistUid))),
+          getDocs(query(collection(db, "patients"), where("ownerId", "==", therapistUid)))
         ]);
 
         const externalPatientsMap: { [key: string]: { name: string; email: string; phone: string; rut: string } } = {};
@@ -806,8 +818,17 @@ ${therapistName || "Psicólogo/a Tratante"}`;
         });
 
         // Compare with existing patients profiles
-        const existingRuts = new Set(patients.map(p => p.rut.trim().replace(/\./g, "").replace(/\-/g, "").toLowerCase()));
-        const existingEmails = new Set(patients.map(p => p.email.trim().toLowerCase()));
+        const existingRuts = new Set();
+        const existingEmails = new Set();
+        ptsSnap.forEach((d) => {
+          const pData = d.data();
+          if (pData.rut) {
+            existingRuts.add(pData.rut.trim().replace(/\./g, "").replace(/\-/g, "").toLowerCase());
+          }
+          if (pData.email) {
+            existingEmails.add(pData.email.trim().toLowerCase());
+          }
+        });
 
         for (const [keyRut, extPatient] of Object.entries(externalPatientsMap)) {
           const normExtRut = keyRut.replace(/\./g, "").replace(/\-/g, "").toLowerCase();
@@ -842,7 +863,7 @@ ${therapistName || "Psicólogo/a Tratante"}`;
 
     // Run background sync check
     syncExternalPatients();
-  }, [therapistUid, loadingPatients, patients]);
+  }, [therapistUid, loadingPatients]);
 
   // 2. Fetch histories records for the selected patient
   useEffect(() => {
@@ -873,6 +894,12 @@ ${therapistName || "Psicólogo/a Tratante"}`;
 
     return () => unsubscribe();
   }, [selectedPatient, therapistUid]);
+
+  // Reset inner evolution tab mode to view whenever a new patient is selected
+  useEffect(() => {
+    setEvolutionTabMode("view");
+    setActiveSessionSubTab("evolution");
+  }, [selectedPatient?.id]);
 
   const validateChileanRut = (rutStr: string) => {
     const normalized = rutStr.replace(/\./g, "").replace(/-/g, "").trim();
@@ -1126,6 +1153,50 @@ ${therapistName || "Psicólogo/a Tratante"}`;
       setSignatureModalOpen(false);
       setSignaturePin("");
       await performSaveSessionRecord(true, signatureName.trim(), signatureDoc.trim());
+    }
+  };
+
+  const handleSaveAppendedNotes = async () => {
+    if (!selectedRecordForEdit || !selectedPatient) return;
+    if (!appendedNotesText.trim()) {
+      alert("Por favor ingrese las notas o enmiendas que desea anexar.");
+      return;
+    }
+    if (!proSignatureInput.trim()) {
+      alert("Por favor identifíquese ingresando su nombre, firma o ID profesional para reabrir y enmendar la ficha clínica.");
+      return;
+    }
+
+    setIsSavingAppendedNotes(true);
+    try {
+      const docRef = doc(db, "histories", selectedRecordForEdit.id);
+      const todayStr = new Date().toLocaleString("es-CL");
+      
+      const newAmendmentBlock = `\n\n--- 📌 REGISTRO ENMENDADO (Anexado el ${todayStr}) ---\nFirma Profesional Enmendante: ${proSignatureInput.trim()}\n${appendedNotesText.trim()}`;
+      
+      const updatedNotes = (selectedRecordForEdit.notes || "") + newAmendmentBlock;
+      await updateDoc(docRef, {
+        notes: updatedNotes,
+        lastAmendedAt: Timestamp.now(),
+        lastAmendedBy: proSignatureInput.trim()
+      });
+
+      await writeAuditLog(
+        selectedPatient.id,
+        selectedPatient.name,
+        "EDICIÓN",
+        `Adición de información complementaria a evolución ID: ${selectedRecordForEdit.id}. Registrado por profesional: ${proSignatureInput.trim()}`
+      );
+
+      setSelectedRecordForEdit(null);
+      setAppendedNotesText("");
+      setProSignatureInput("");
+      alert("La enmienda fue registrada exitosamente y guardada de forma segura en la evolución del paciente.");
+    } catch (err) {
+      console.error("Error updating evolution history record:", err);
+      alert("Ocurrió un error al intentar guardar la enmienda.");
+    } finally {
+      setIsSavingAppendedNotes(false);
     }
   };
 
@@ -1484,9 +1555,183 @@ ${therapistName || "Psicólogo/a Tratante"}`;
             {/* New clinical record session form */}
             <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm space-y-4">
               
-              {/* INTERACTIVE CLINICAL STOPWATCH MODULE WITH DYNAMIC COLOR BAND */}
-              <div className="border border-gray-200 rounded-xl overflow-hidden text-xs">
-                <div 
+              {/* SESIÓN EVOLUTION TABS SWITCHER (Now permanently at the top of the workspace dossier!) */}
+              <div className="flex border-b border-gray-250 mt-2 font-sans select-none">
+                <button
+                  type="button"
+                  onClick={() => setActiveSessionSubTab("evolution")}
+                  className={`flex-1 py-1.5 text-center border-b-2 text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    activeSessionSubTab === "evolution"
+                      ? "border-slate-900 text-slate-900 bg-slate-50/50"
+                      : "border-transparent text-gray-400 hover:text-gray-650"
+                  }`}
+                >
+                  <FileText className="w-4 h-4 text-slate-600" />
+                  <span>📝 Notas / Evoluciones</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveSessionSubTab("instruments")}
+                  className={`flex-1 py-1.5 text-center border-b-2 text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    activeSessionSubTab === "instruments"
+                      ? "border-slate-900 text-slate-900 bg-slate-50/50"
+                      : "border-transparent text-gray-400 hover:text-gray-650"
+                  }`}
+                >
+                  <Activity className="w-4 h-4 text-emerald-600 animate-pulse" />
+                  <span>📊 PHQ-9/GAD</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveSessionSubTab("cbt_diary")}
+                  className={`flex-1 py-1.5 text-center border-b-2 text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    activeSessionSubTab === "cbt_diary"
+                      ? "border-slate-900 text-slate-900 bg-slate-50/50"
+                      : "border-transparent text-gray-400 hover:text-gray-650"
+                  }`}
+                >
+                  <Smile className="w-4 h-4 text-emerald-500" />
+                  <span>🍃 Reporte Diario IP</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveSessionSubTab("documents")}
+                  className={`flex-1 py-1.5 text-center border-b-2 text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    activeSessionSubTab === "documents"
+                      ? "border-slate-900 text-slate-900 bg-slate-50/50"
+                      : "border-transparent text-gray-400 hover:text-gray-650"
+                  }`}
+                >
+                  <FileCheck2 className="w-4 h-4 text-amber-500" />
+                  <span>📜 Informes</span>
+                </button>
+              </div>
+
+              {/* ACTION SUB-NAVIGATION BAR FOR NOTES TAB */}
+              {activeSessionSubTab === "evolution" && (
+                <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3 bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-xs text-left">
+                  <div className="flex gap-1 bg-white p-1 rounded-lg border shadow-xs">
+                    <button
+                      type="button"
+                      onClick={() => setEvolutionTabMode("view")}
+                      className={`px-3 py-1.5 rounded-md font-bold transition-all flex items-center gap-1.5 cursor-pointer select-none ${
+                        evolutionTabMode === "view"
+                          ? "bg-slate-900 text-white shadow-xs"
+                          : "text-slate-600 hover:bg-slate-50"
+                      }`}
+                    >
+                      <BookOpen className="w-4 h-4" />
+                      <span>👁️ Historial de Evoluciones ({historyRecords.length})</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEvolutionTabMode("create")}
+                      className={`px-3 py-1.5 rounded-md font-bold transition-all flex items-center gap-1.5 cursor-pointer select-none ${
+                        evolutionTabMode === "create"
+                          ? "bg-slate-900 text-white shadow-xs"
+                          : "text-slate-600 hover:bg-slate-50"
+                      }`}
+                    >
+                      <Plus className="w-4 h-4 text-emerald-550" />
+                      <span>➕ Registrar Nueva Sesión</span>
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setSelectedPatient(null)}
+                    className="text-gray-500 hover:text-red-650 border border-transparent hover:border-red-200 hover:bg-red-50 text-[11px] font-bold px-3 py-1.5 rounded-lg transition-all select-none cursor-pointer flex items-center gap-1.5 mr-1"
+                    title="Cerrar expediente activo"
+                  >
+                    <span>✕ Salir de la Ficha</span>
+                  </button>
+                </div>
+              )}
+
+              {/* TIMELINE LIST COMPONENT INSIDE THE NOTES TAB */}
+              {activeSessionSubTab === "evolution" && evolutionTabMode === "view" && (
+                <div className="space-y-4 text-left">
+                  <div className="flex justify-between items-center bg-slate-50/70 p-3 rounded-lg border border-gray-150 font-sans">
+                    <span className="font-bold text-slate-805 text-xs">Visor y Lectura de Evoluciones Clínicas (Secreto Profesional)</span>
+                    <span className="bg-slate-200 text-slate-705 text-[10.5px] font-bold px-2 py-0.5 rounded-full">
+                      {historyRecords.length} Sesiones Históricas
+                    </span>
+                  </div>
+
+                  {loadingRecords ? (
+                    <div className="space-y-2 py-4">
+                      <div className="h-14 bg-slate-100 rounded-lg animate-pulse w-full"></div>
+                    </div>
+                  ) : historyRecords.length === 0 ? (
+                    <div className="p-6 rounded-2xl bg-indigo-50/50 border border-indigo-100 text-slate-850 space-y-3 font-sans">
+                      <div className="flex items-center gap-1.5 font-bold text-slate-900 text-xs">
+                        <span className="w-2.5 h-2.5 bg-indigo-500 rounded-full animate-ping" />
+                        <span>Paciente sin evolución clínica escrita aún</span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 leading-relaxed max-w-2xl">
+                        Esta paciente se encuentra registrada de manera conforme en la plataforma. Puedes examinar sus reportes en las pestañas de arriba, o presionar el botón <strong>"+ Registrar Nueva Sesión"</strong> para redactar su primer reporte psicoterapéutico formal.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4 max-h-[500px] overflow-y-auto pr-1 font-sans">
+                      {historyRecords.map((r) => (
+                        <div key={r.id} className="border border-gray-150 rounded-xl p-4 bg-slate-50/10 hover:bg-white hover:border-gray-250 transition-all text-xs space-y-3 shadow-2xs">
+                          <div className="flex justify-between items-center bg-slate-50 p-2 rounded-lg border border-gray-100">
+                            <span className="font-bold text-slate-900">📅 Consulta realizada: {r.date}</span>
+                            <span className="text-[10px] font-mono text-gray-405 bg-white border p-1 rounded font-bold">ID Ficha: {r.id}</span>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-left">
+                            <div>
+                              <strong className="text-slate-805 block mb-1">Notas del Terapeuta:</strong>
+                              <p className="text-gray-600 font-sans leading-relaxed whitespace-pre-wrap bg-white p-3 rounded-lg border border-gray-100 max-h-[120px] overflow-y-auto select-text">{r.notes}</p>
+                            </div>
+                            <div>
+                              <strong className="text-emerald-805 flex items-center gap-1 mb-1">
+                                <Sparkles className="w-3.5 h-3.5 text-emerald-600 animate-pulse" /> Síntesis Clínica (IA Gemini):
+                              </strong>
+                              <p className="text-gray-600 font-sans leading-relaxed whitespace-pre-wrap bg-emerald-50/5 border border-emerald-100 p-3 rounded-lg max-h-[120px] overflow-y-auto select-text">{r.aiSummary}</p>
+                            </div>
+                          </div>
+
+                          <div className="flex justify-between items-center pt-2.5 border-t border-gray-100 text-[10.5px]">
+                            <span className="text-slate-550">
+                              Diagnóstico/Clasificación: <strong className="text-slate-705 bg-slate-100 px-2 py-0.5 rounded border ml-1 font-semibold">{r.observations || "Estable"}</strong>
+                            </span>
+                            <div className="flex gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => setSelectedRecordForDetail(r)}
+                                className="bg-slate-900 hover:bg-slate-800 text-white font-bold p-1 px-3 rounded-lg transition select-none cursor-pointer"
+                              >
+                                Ver Detalles 🔍
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedRecordForEdit(r);
+                                  setAppendedNotesText("");
+                                  setProSignatureInput(therapistName || "");
+                                }}
+                                className="bg-white hover:bg-emerald-50 text-emerald-700 hover:text-emerald-800 border border-emerald-200 font-bold p-1 px-3 rounded-lg transition select-none cursor-pointer"
+                              >
+                                Editar / Anexar ✏️
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+              
+              {/* RENDERS STOPWATCH AND TAGS FOR NEW SESSION MODE ONLY */}
+              {activeSessionSubTab === "evolution" && evolutionTabMode === "create" && (
+                <>
+                  {/* INTERACTIVE CLINICAL STOPWATCH MODULE WITH DYNAMIC COLOR BAND */}
+                  <div className="border border-gray-200 rounded-xl overflow-hidden text-xs text-left">
+                    <div 
                   onClick={() => setTimerExpanded(!timerExpanded)}
                   className="bg-slate-50 border-b p-3 flex justify-between items-center cursor-pointer hover:bg-slate-100 select-none"
                 >
@@ -1613,58 +1858,8 @@ ${therapistName || "Psicólogo/a Tratante"}`;
                   })}
                 </div>
               </div>
-
-              {/* SESIÓN EVOLUTION TABS SWITCHER */}
-              <div className="flex border-b border-gray-250 mt-2 font-sans select-none">
-                <button
-                  type="button"
-                  onClick={() => setActiveSessionSubTab("evolution")}
-                  className={`flex-1 py-2.5 text-center border-b-2 text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                    activeSessionSubTab === "evolution"
-                      ? "border-slate-900 text-slate-900 bg-slate-50/50"
-                      : "border-transparent text-gray-400 hover:text-gray-650"
-                  }`}
-                >
-                  <FileText className="w-4 h-4 text-slate-600" />
-                  <span>📝 Notas</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveSessionSubTab("instruments")}
-                  className={`flex-1 py-2.5 text-center border-b-2 text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                    activeSessionSubTab === "instruments"
-                      ? "border-slate-900 text-slate-900 bg-slate-50/50"
-                      : "border-transparent text-gray-400 hover:text-gray-650"
-                  }`}
-                >
-                  <Activity className="w-4 h-4 text-emerald-600 animate-pulse" />
-                  <span>📊 PHQ-9/GAD</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveSessionSubTab("cbt_diary")}
-                  className={`flex-1 py-2.5 text-center border-b-2 text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                    activeSessionSubTab === "cbt_diary"
-                      ? "border-slate-900 text-slate-900 bg-slate-50/50"
-                      : "border-transparent text-gray-400 hover:text-gray-650"
-                  }`}
-                >
-                  <Smile className="w-4 h-4 text-emerald-500" />
-                  <span>🍃 Reporte Diario IP</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveSessionSubTab("documents")}
-                  className={`flex-1 py-2.5 text-center border-b-2 text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                    activeSessionSubTab === "documents"
-                      ? "border-slate-900 text-slate-900 bg-slate-50/50"
-                      : "border-transparent text-gray-400 hover:text-gray-650"
-                  }`}
-                >
-                  <FileCheck2 className="w-4 h-4 text-amber-500" />
-                  <span>📜 Informes</span>
-                </button>
-              </div>
+            </>
+          )}
 
               {activeSessionSubTab === "instruments" ? (
                 <div className="bg-slate-50 rounded-2xl border border-slate-200 p-5 space-y-5 text-xs font-sans">
@@ -2251,7 +2446,7 @@ ${therapistName || "Psicólogo/a Tratante"}`;
                     </div>
                   </div>
                 </div>
-              ) : (
+              ) : (activeSessionSubTab === "evolution" && evolutionTabMode === "create") ? (
                 <form onSubmit={handleSaveSessionRecord} className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1">
@@ -2528,74 +2723,7 @@ ${therapistName || "Psicólogo/a Tratante"}`;
                   </button>
                 </div>
               </form>
-              )}
-            </div>
-
-            {/* Patient Clinical Timeline Case File records */}
-            <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
-              <h4 className="text-sm font-bold text-slate-900 mb-4 flex items-center gap-2">
-                <Clock className="w-5 h-5 text-slate-700" /> Historial de Turnos y Evolución ({historyRecords.length})
-              </h4>
-
-              {loadingRecords ? (
-                <div className="space-y-2 py-4">
-                  <div className="h-20 bg-slate-50 rounded-lg animate-pulse"></div>
-                  <div className="h-20 bg-slate-50 rounded-lg animate-pulse"></div>
-                </div>
-              ) : historyRecords.length === 0 ? (
-                <div className="space-y-4 font-sans text-left">
-                  <div className="p-5 rounded-2xl bg-indigo-50/50 dark:bg-slate-900 border border-indigo-100 dark:border-slate-800 text-slate-800 dark:text-slate-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                    <div className="space-y-1.5 text-left">
-                      <div className="flex items-center gap-1.5 font-bold text-indigo-950 dark:text-indigo-400 text-sm">
-                        <span className="w-2.5 h-2.5 bg-indigo-500 rounded-full animate-ping shrink-0" />
-                        <span>Paciente recientemente registrada a través del Portal</span>
-                      </div>
-                      <p className="text-[11px] text-slate-500 dark:text-gray-400 leading-relaxed max-w-2xl">
-                        {selectedPatient?.rut ? `RUT: ${selectedPatient.rut}. ` : ""}
-                        Esta paciente se ha registrado autónomamente en el Portal de Pacientes. **No registra evolución clínica escrita ni consultas grabadas todavía** al ser una ficha nueva, pero puedes ver toda la sincronización de sus reportes de temperamento, horas de sueño y diario cognitivo de pensamientos ingresados.
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setActiveSessionSubTab("cbt_diary")}
-                      className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px] px-4 py-2 rounded-xl shrink-0 cursor-pointer transition-all active:scale-95 shadow-sm inline-flex items-center gap-1.5"
-                    >
-                      📊 Ver Diario de Ánimo & Sueño
-                    </button>
-                  </div>
-                  <div className="text-center py-6 bg-slate-50/50 dark:bg-slate-950 rounded-2xl border border-slate-100 dark:border-slate-850 text-xs text-gray-400 italic">
-                    Sin intervenciones ni notas registradas de terapia en esta plataforma aún. Use el panel "📝 Notas" superior para crear la primera evolución del paciente.
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-4 max-h-[500px] overflow-y-auto pr-1">
-                  {historyRecords.map((r) => (
-                    <div key={r.id} className="border border-gray-100 rounded-xl p-4 bg-slate-50/30 text-xs space-y-3 shadow-xs">
-                      <div className="flex justify-between items-center bg-slate-100/50 p-2 rounded-lg">
-                        <span className="font-semibold text-slate-900">📅 Cita: {r.date}</span>
-                        <span className="text-[10px] font-mono text-gray-400 bg-white px-2 py-0.5 rounded border">ID: {r.id}</span>
-                      </div>
-                      
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                          <strong className="text-slate-800 block mb-1">Notas de Sesión:</strong>
-                          <p className="text-gray-600 font-sans leading-relaxed whitespace-pre-wrap bg-white p-3 rounded-lg border border-gray-100 max-h-[150px] overflow-y-auto">{r.notes}</p>
-                        </div>
-                        <div>
-                          <strong className="text-emerald-800 flex items-center gap-1 mb-1">
-                            <Sparkles className="w-3.5 h-3.5" /> Síntesis Clínica (Gemini AI):
-                          </strong>
-                          <p className="text-gray-600 font-sans leading-relaxed whitespace-pre-wrap bg-emerald-500/5 border border-emerald-100 p-3 rounded-lg max-h-[150px] overflow-y-auto">{r.aiSummary}</p>
-                        </div>
-                      </div>
-
-                      <div className="text-[10px] text-slate-500 font-mono text-right">
-                        Diagnósticos / Alertas: <span className="bg-slate-200/50 text-slate-705 px-2 py-0.5 rounded font-sans font-semibold">{r.observations}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+              ) : null}
             </div>
 
             {/* AUDIT LOG SECURITY BITACORA (CHILEAN LAW 19.628 & 20.584 COMPLIANT) */}
@@ -2730,80 +2858,101 @@ ${therapistName || "Psicólogo/a Tratante"}`;
           </div>
         )}
 
-        {/* ⭐ SECCIÓN RESEÑAS DE PACIENTES - COPIAR Y GESTIONAR OPINIONES */}
-        <div className="bg-white rounded-3xl border border-gray-150 p-6 shadow-sm space-y-4 mt-6">
-          <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200">
-            <div className="space-y-0.5">
-              <h4 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+        {/* ⭐ SECCIÓN RESEÑAS DE PACIENTES - BOLSILLO COLAPSABLE DE CONTROL DE CALIDAD */}
+        <div className="bg-white rounded-3xl border border-gray-150 p-5 shadow-sm mt-6 transition-all duration-300">
+          <button
+            type="button"
+            onClick={() => setIsQualityControlOpen(!isQualityControlOpen)}
+            className="w-full flex items-center justify-between text-left focus:outline-none select-none cursor-pointer group"
+          >
+            <div className="flex items-center gap-3">
+              <div className="bg-amber-50 p-2.5 rounded-xl border border-amber-100 group-hover:bg-amber-100 transition-all">
                 <Star className="w-5 h-5 text-amber-500 fill-amber-500" />
-                Control de Calidad: Reseñas y Satisfacción de Pacientes
-              </h4>
-              <span className="text-[10px] text-slate-500 block">
-                Herramienta para recopilar feedback de servicio y transparentar la labor clínica conforme a la confidencialidad legal.
-              </span>
+              </div>
+              <div className="space-y-0.5">
+                <h4 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                  Control de Calidad: Reseñas y Satisfacción de Pacientes
+                  <span className="bg-slate-100 text-slate-700 text-[10px] font-bold px-2 py-0.5 rounded-full font-mono">
+                    {receivedReviews.length} opiniones
+                  </span>
+                </h4>
+                <p className="text-[10px] text-gray-400">
+                  {isQualityControlOpen 
+                    ? "▲ Presione para colapsar este panel de control" 
+                    : "▼ Presione para expandir, visualizar e inactivar opiniones en la web pública"}
+                </p>
+              </div>
             </div>
             
-            <div className="bg-white p-2.5 rounded-xl border flex items-center gap-4 text-xs font-mono font-bold text-slate-700">
-              <div>
-                <span>Total: {receivedReviews.length}</span>
-              </div>
-              <div>
+            <div className="flex items-center gap-3">
+              <div className="bg-slate-50 p-2 px-3 rounded-xl border flex items-center gap-2 text-xs font-mono font-bold text-slate-700">
                 <span>Promedio: {(receivedReviews.reduce((acc, r) => acc + r.rating, 0) / (receivedReviews.length || 1)).toFixed(1)} ⭐</span>
               </div>
+              <span className="text-[11px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-600 p-2 rounded-xl border border-slate-200 transition-all shrink-0">
+                {isQualityControlOpen ? "Colapsar ▲" : "Expandir ▼"}
+              </span>
             </div>
-          </div>
+          </button>
 
-          {loadingReviews ? (
-            <div className="text-center py-4 text-xs text-gray-400">Cargando sugerencias de evaluación recibidas...</div>
-          ) : receivedReviews.length === 0 ? (
-            <div className="text-center py-8 bg-slate-50/50 rounded-2xl border border-slate-100 text-xs text-gray-400 font-sans italic">
-              No se han registrado evaluaciones de pacientes todavía. Copie el enlace "Solicitar Reseña" arriba en cualquier expediente activo para enviarlo a sus pacientes atendidos.
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {receivedReviews.map((rev) => (
-                <div key={rev.id} className="border border-gray-100 rounded-xl p-4 bg-slate-50/30 text-xs space-y-3 relative flex flex-col justify-between">
-                  <button
-                    onClick={() => handleDeleteReview(rev.id)}
-                    className="absolute top-3 right-3 p-1 hover:bg-rose-105 text-rose-500 hover:text-rose-600 rounded cursor-pointer transition"
-                    title="Eliminar reseña de la página pública"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                  
-                  <div className="space-y-1.5 pr-6">
-                    <div className="flex items-center gap-1.5">
-                      <div className="flex gap-0.5">
-                        {[1, 2, 3, 4, 5].map((s) => (
-                          <Star
-                            key={s}
-                            className={`w-3 h-3 ${
-                              s <= rev.rating ? "fill-amber-400 stroke-amber-500 text-amber-500" : "text-gray-200 stroke-gray-300"
-                            }`}
-                          />
-                        ))}
-                      </div>
-                      <span className="font-bold text-slate-800">{rev.patientName}</span>
-                      {rev.isAnonymized && (
-                        <span className="text-[9px] bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded font-bold uppercase tracking-wide">P.A.</span>
-                      )}
-                    </div>
-                    
-                    <p className="text-slate-600 font-sans leading-relaxed italic">
-                      "{rev.comment || "Sin comentarios textuales"}"
-                    </p>
-                  </div>
+          {isQualityControlOpen && (
+            <div className="pt-5 border-t border-dashed border-gray-200 mt-5 space-y-4 animate-fade-in-up">
+              <div className="bg-slate-50 p-3 rounded-xl text-[10.5px] leading-relaxed text-slate-600">
+                💡 <strong>Control de difusión médica:</strong> Todo feedback provisto se almacena de forma digital confidencial. Los pacientes brindan consentimiento para publicar o mantener sus reseñas internas de forma privada en el Portal del Especialista. Puede revocar u omitir cualquier opinión del portal público presionando el icono del bote de basura.
+              </div>
 
-                  <div className="flex justify-between items-center pt-2 border-t border-gray-100 mt-2 text-[10px]">
-                    <span className="text-gray-400">
-                      📅 {rev.createdAt?.toDate ? new Date(rev.createdAt.toDate()).toLocaleDateString() : "Reciente"}
-                    </span>
-                    <span className={`font-semibold ${rev.publicConsent ? "text-emerald-500 font-bold" : "text-amber-500"}`}>
-                      {rev.publicConsent ? "✓ Permitido publicar" : "🔒 Privado (Solo doctor)"}
-                    </span>
-                  </div>
+              {loadingReviews ? (
+                <div className="text-center py-4 text-xs text-gray-400">Cargando sugerencias de evaluación recibidas...</div>
+              ) : receivedReviews.length === 0 ? (
+                <div className="text-center py-8 bg-slate-55/30 rounded-2xl border border-dashed border-slate-200 text-xs text-gray-400 font-sans italic">
+                  No se han registrado evaluaciones de pacientes todavía. Copie el enlace "Solicitar Reseña" arriba en cualquier expediente activo para enviarlo a sus pacientes atendidos.
                 </div>
-              ))}
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {receivedReviews.map((rev) => (
+                    <div key={rev.id} className="border border-gray-100 rounded-xl p-4 bg-slate-50/30 text-xs space-y-3 relative flex flex-col justify-between hover:border-gray-300 transition-all">
+                      <button
+                        onClick={() => handleDeleteReview(rev.id)}
+                        className="absolute top-3 right-3 p-1 hover:bg-rose-50 text-rose-500 hover:text-rose-600 rounded cursor-pointer transition"
+                        title="Eliminar reseña de la página pública"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                      
+                      <div className="space-y-1.5 pr-6">
+                        <div className="flex items-center gap-1.5">
+                          <div className="flex gap-0.5">
+                            {[1, 2, 3, 4, 5].map((s) => (
+                              <Star
+                                key={s}
+                                className={`w-3 h-3 ${
+                                  s <= rev.rating ? "fill-amber-400 stroke-amber-500 text-amber-500" : "text-gray-200 stroke-gray-300"
+                                }`}
+                              />
+                            ))}
+                          </div>
+                          <span className="font-bold text-slate-800">{rev.patientName}</span>
+                          {rev.isAnonymized && (
+                            <span className="text-[9px] bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded font-bold uppercase tracking-wide">P.A.</span>
+                          )}
+                        </div>
+                        
+                        <p className="text-slate-600 font-sans leading-relaxed italic">
+                          "{rev.comment || "Sin comentarios textuales"}"
+                        </p>
+                      </div>
+
+                      <div className="flex justify-between items-center pt-2 border-t border-gray-100 mt-2 text-[10px]">
+                        <span className="text-gray-400 font-mono">
+                          📅 {rev.createdAt?.toDate ? new Date(rev.createdAt.toDate()).toLocaleDateString() : "Reciente"}
+                        </span>
+                        <span className={`font-semibold ${rev.publicConsent ? "text-emerald-500 font-bold" : "text-amber-500"}`}>
+                          {rev.publicConsent ? "✓ Publicación Permitida" : "🔒 Privado (Solo Especialista)"}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
