@@ -148,6 +148,20 @@
         "timestamp": { "type": "string", "format": "date-time" }
       },
       "required": ["patientId", "action", "detail"]
+    },
+    "PublicBookedSlot": {
+      "title": "PublicBookedSlot",
+      "description": "Anonymized booked slots mapped per date for public reservation calendar constraints without leaking PII",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Equal to the matching appointment ID" },
+        "date": { "type": "string", "description": "ISO date YYYY-MM-DD" },
+        "timeSlot": { "type": "string", "description": "Hour range of the slot (e.g. 18:00 - 18:45)" },
+        "status": { "type": "string", "enum": ["scheduled", "canceled"], "description": "Cancellation indicator for public reference" },
+        "ownerId": { "type": "string", "description": "User UID of the psychologist who owns the parent agenda" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp in ISO format" }
+      },
+      "required": ["id", "date", "timeSlot", "status", "ownerId"]
     }
   },
   "firestore": {
@@ -182,6 +196,10 @@
     "/audit_logs/{logId}": {
       "schema": "AuditLog",
       "description": "Electronic audit/signature registers designed to prevent alteration"
+    },
+    "/public_booked_slots/{slotId}": {
+      "schema": "PublicBookedSlot",
+      "description": "Anonymized booked slots mapped per date for public calendar constraints to prevent double-booking safely without leaking patient PII"
     }
   }
 }

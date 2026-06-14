@@ -544,7 +544,8 @@ export default function ClinicianAgenda({ therapistUid, onJoinCall }: ClinicianA
 
     try {
       const orig = proposal.originalAppointment;
-      const apptId = "app_" + Math.random().toString(36).substring(2, 11);
+      const cleanSlot = proposal.proposedSlot.replace(/[^a-zA-Z0-9]/g, "_");
+      const apptId = `appt_${therapistUid}_${proposal.proposedDate}_${cleanSlot}`;
       const apptRef = doc(db, "appointments", apptId);
 
       const newAppt: Appointment = {
@@ -964,7 +965,8 @@ export default function ClinicianAgenda({ therapistUid, onJoinCall }: ClinicianA
     if (!patient) return;
 
     try {
-      const apptId = "app_" + Math.random().toString(36).substring(2, 11);
+      const cleanSlot = apptSlot.replace(/[^a-zA-Z0-9]/g, "_");
+      const apptId = `appt_${therapistUid}_${apptDate}_${cleanSlot}`;
       const apptRef = doc(db, "appointments", apptId);
 
       const newAppt: Appointment = {

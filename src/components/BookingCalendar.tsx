@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { collection, doc, setDoc, updateDoc, Timestamp } from "firebase/firestore";
+import { collection, doc, setDoc, updateDoc, getDoc, Timestamp } from "firebase/firestore";
 import { db, handleFirestoreError, OperationType } from "../firebase";
 import { Appointment } from "../types";
 import { Calendar as CalendarIcon, Clock, CreditCard, ShieldCheck, Mail, CheckCircle2, AlertTriangle, MessageSquare, Info, ZoomIn, ZoomOut, Home, Heart } from "lucide-react";
@@ -186,6 +186,62 @@ export default function BookingCalendar({
     return names[d];
   };
 
+  // Real-time double-booking checking and filtering
+  const [bookedSlots, setBookedSlots] = useState<string[]>([]);
+  const [checkingAvailability, setCheckingAvailability] = useState(false);
+
+  useEffect(() => {
+    if (!date) {
+      setBookedSlots([]);
+      return;
+    }
+
+    let isMounted = true;
+    const fetchBookedSlots = async () => {
+      setCheckingAvailability(true);
+      try {
+        const promises = weeklyAvailability.slots.map(async (slot) => {
+          const cleanSlot = slot.replace(/[^a-zA-Z0-9]/g, "_");
+          const slotApptId = `appt_${therapistUid}_${date}_${cleanSlot}`;
+          const slotRef = doc(db, "appointments", slotApptId);
+          const docSnap = await getDoc(slotRef);
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            if (data.status !== "canceled") {
+              return slot; // Booked!
+            }
+          }
+          return null;
+        });
+
+        const results = await Promise.all(promises);
+        if (isMounted) {
+          const booked = results.filter((s) => s !== null) as string[];
+          setBookedSlots(booked);
+        }
+      } catch (err) {
+        console.error("Error filtering booked slots:", err);
+      } finally {
+        if (isMounted) {
+          setCheckingAvailability(false);
+        }
+      }
+    };
+
+    fetchBookedSlots();
+
+    // Listen to custom event when appointments might be saved on local storage/reloaded
+    const handleSync = () => {
+      fetchBookedSlots();
+    };
+    window.addEventListener("storage", handleSync);
+
+    return () => {
+      isMounted = false;
+      window.removeEventListener("storage", handleSync);
+    };
+  }, [date, therapistUid, weeklyAvailability.slots]);
+
   // Compute dynamic blocks rendered on screen
   const renderedSlots = (() => {
     if (!date) return [];
@@ -202,6 +258,9 @@ export default function BookingCalendar({
     if (suspension && suspension.type === "specific_slots") {
       activeSlots = activeSlots.filter((slot) => !suspension.slots.includes(slot));
     }
+
+    // Filter out already booked/scheduled slots in real time
+    activeSlots = activeSlots.filter((slot) => !bookedSlots.includes(slot));
 
     return activeSlots;
   })();
@@ -270,9 +329,18 @@ export default function BookingCalendar({
     setPaymentError("");
 
     try {
-      // 1. Create the base appointment document with status "pending" as authorized by Firestore Rules
-      const apptId = "app_" + Math.random().toString(36).substring(2, 11);
+      // 1. Create the base appointment document with status "pending" as authorized by Firestore Rules (with real-time double-booking guard)
+      const cleanSlot = timeSlot.replace(/[^a-zA-Z0-9]/g, "_");
+      const apptId = `appt_${therapistUid}_${date}_${cleanSlot}`;
       const apptDocRef = doc(db, "appointments", apptId);
+
+      // Double-booking check right before reservation is finalized
+      const existingSnap = await getDoc(apptDocRef);
+      if (existingSnap.exists() && existingSnap.data().status !== "canceled") {
+        setPaymentError("Disculpas, este horario ya se encuentra ocupado. Alguien acaba de reservarlo hace unos momentos. Por favor vuelva atrás y elija otra hora.");
+        setLoading(false);
+        return;
+      }
       
       const newAppointment: Appointment = {
         id: apptId,

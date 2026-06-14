@@ -78,7 +78,6 @@ export default function App() {
   const [inactivityTimer, setInactivityTimer] = useState<number>(900); // 15 minutes by default (900s)
   const [isAppAutoLocked, setIsAppAutoLocked] = useState<boolean>(false);
   const [authError, setAuthError] = useState<string | null>(null);
-  const [pinInput, setPinInput] = useState("");
 
   // Patient feedback evaluation states
   const [reviewFormState, setReviewFormState] = useState<{
@@ -156,19 +155,6 @@ export default function App() {
   // Listen for Google Auth state
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      const offlineSession = localStorage.getItem("mindspace_offline_clinician_session");
-      if (offlineSession) {
-        try {
-          const parsed = JSON.parse(offlineSession);
-          setUser(parsed);
-          setPortalMode("dashboard");
-          setAuthLoading(false);
-          return;
-        } catch (e) {
-          console.error("Error reading cached clinician session:", e);
-        }
-      }
-
       setUser(currentUser);
       if (currentUser) {
         setPortalMode("dashboard"); // Auto redirect to dashboard once logged in
@@ -276,32 +262,15 @@ export default function App() {
     }
   };
 
-  const handlePinLoginSubmit = () => {
-    setAuthError(null);
-    if (pinInput === "1234" || pinInput === "2026") {
-      const simulatedUser = {
-        uid: "default_psychologist_uid_123",
-        email: "joseignacio.rovel@gmail.com",
-        displayName: "Ps. José Romero Velásquez",
-        photoURL: null
-      };
-      localStorage.setItem("mindspace_offline_clinician_session", JSON.stringify(simulatedUser));
-      setUser(simulatedUser as any as User);
-      setPinInput("");
-      setPortalMode("dashboard");
-      soundFX.playChime();
-    } else {
-      setAuthError("El PIN clínico ingresado es incorrecto. Autorización fallida.");
-      soundFX.playPop();
-    }
-  };
-
   const handleLogout = async () => {
     try {
       localStorage.removeItem("mindspace_offline_clinician_session");
       await signOut(auth);
+      setUser(null);
       setCachedAccessToken(null);
       setPortalMode("public");
+      setActiveTab("agenda");
+      soundFX.playPop();
     } catch (err) {
       console.error("Signout error:", err);
     }
@@ -775,13 +744,14 @@ export default function App() {
               <div className="space-y-6 animate-in fade-in duration-200">
                 {(() => {
                   // Guard check for clinician access (Chilean Laws 19.628 & 20.584)
+                  const userEmailNormal = user?.email?.toLowerCase().trim();
                   const isClinicianEmail = user && (
-                    user.email === "p.joseignacio@gmail.com" || 
-                    user.email === "jose.ignacio.therapist@gmail.com" ||
-                    user.email === "joseignacio.rovel@gmail.com" ||
+                    userEmailNormal === "p.joseignacio@gmail.com" || 
+                    userEmailNormal === "jose.ignacio.therapist@gmail.com" ||
+                    userEmailNormal === "joseignacio.rovel@gmail.com" ||
                     user.uid === "default_psychologist_uid_123" ||
                     !settings ||
-                    settings.contactEmail === user.email ||
+                    (settings.contactEmail && settings.contactEmail.toLowerCase().trim() === userEmailNormal) ||
                     settings.ownerId === user.uid
                   );
 
@@ -804,7 +774,9 @@ export default function App() {
                           </div>
                         </div>
 
-                        <div className="space-y-2 pt-2">
+
+
+                        <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800/80">
                           <button
                             onClick={() => setPortalMode("patient")}
                             className="w-full bg-slate-950 dark:bg-white text-white dark:text-slate-950 text-xs font-bold py-3 px-4 rounded-xl uppercase tracking-wider transition hover:scale-102 cursor-pointer shadow"
@@ -868,38 +840,6 @@ export default function App() {
                           </svg>
                           Ingresar con su cuenta de Google
                         </button>
-
-                        <div className="border-t border-slate-100 dark:border-slate-800/80 pt-5 space-y-3">
-                          <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
-                            ⚡ Acceso Clínico Directo con PIN
-                          </p>
-                          <div className="flex gap-2">
-                            <input
-                              type="password"
-                              id="specialist-pin-login-input"
-                              placeholder="Ingrese PIN (Ej: 1234 o 2026)"
-                              value={pinInput}
-                              onChange={(e) => setPinInput(e.target.value)}
-                              className="flex-1 p-3 rounded-xl border border-gray-250 dark:border-slate-800 bg-white dark:bg-slate-950 focus:outline-none focus:ring-1 focus:ring-slate-900 text-center font-mono font-bold text-sm tracking-widest text-slate-850 dark:text-white"
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") {
-                                  handlePinLoginSubmit();
-                                }
-                              }}
-                            />
-                            <button
-                              type="button"
-                              id="specialist-pin-login-btn"
-                              onClick={handlePinLoginSubmit}
-                              className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-3 rounded-xl font-bold text-xs transition-all shadow-sm shrink-0 uppercase tracking-wider cursor-pointer"
-                            >
-                              Entrar
-                            </button>
-                          </div>
-                          <p className="text-[9.5px] text-gray-400 dark:text-slate-500 leading-normal">
-                            Si Google Auth es bloqueado por las políticas de cookies del iframe o popups de su navegador, use el PIN de demostración clínica para conectarse instantáneamente.
-                          </p>
-                        </div>
                         
                         <p className="text-[10px] text-gray-400 dark:text-slate-500 pt-1">
                           Servicios de autenticación autorizados de forma privada.
