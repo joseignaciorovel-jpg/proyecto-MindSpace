@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { collection, doc, setDoc, updateDoc, getDoc, Timestamp } from "firebase/firestore";
+import { collection, doc, setDoc, updateDoc, getDoc, Timestamp, query, where, onSnapshot } from "firebase/firestore";
 import { db, handleFirestoreError, OperationType } from "../firebase";
 import { Appointment } from "../types";
 import { Calendar as CalendarIcon, Clock, CreditCard, ShieldCheck, Mail, CheckCircle2, AlertTriangle, MessageSquare, Info, ZoomIn, ZoomOut, Home, Heart } from "lucide-react";
@@ -196,51 +196,32 @@ export default function BookingCalendar({
       return;
     }
 
-    let isMounted = true;
-    const fetchBookedSlots = async () => {
-      setCheckingAvailability(true);
-      try {
-        const promises = weeklyAvailability.slots.map(async (slot) => {
-          const cleanSlot = slot.replace(/[^a-zA-Z0-9]/g, "_");
-          const slotApptId = `appt_${therapistUid}_${date}_${cleanSlot}`;
-          const slotRef = doc(db, "appointments", slotApptId);
-          const docSnap = await getDoc(slotRef);
-          if (docSnap.exists()) {
-            const data = docSnap.data();
-            if (data.status !== "canceled") {
-              return slot; // Booked!
-            }
-          }
-          return null;
-        });
+    setCheckingAvailability(true);
+    
+    // Subscribe in real-time to all appointments for this clinician and date
+    const q = query(
+      collection(db, "appointments"),
+      where("ownerId", "==", therapistUid),
+      where("date", "==", date)
+    );
 
-        const results = await Promise.all(promises);
-        if (isMounted) {
-          const booked = results.filter((s) => s !== null) as string[];
-          setBookedSlots(booked);
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const booked: string[] = [];
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        if (data && data.status !== "canceled") {
+          booked.push(data.timeSlot);
         }
-      } catch (err) {
-        console.error("Error filtering booked slots:", err);
-      } finally {
-        if (isMounted) {
-          setCheckingAvailability(false);
-        }
-      }
-    };
+      });
+      setBookedSlots(booked);
+      setCheckingAvailability(false);
+    }, (error) => {
+      console.error("Error subscribing to appointments for date:", error);
+      setCheckingAvailability(false);
+    });
 
-    fetchBookedSlots();
-
-    // Listen to custom event when appointments might be saved on local storage/reloaded
-    const handleSync = () => {
-      fetchBookedSlots();
-    };
-    window.addEventListener("storage", handleSync);
-
-    return () => {
-      isMounted = false;
-      window.removeEventListener("storage", handleSync);
-    };
-  }, [date, therapistUid, weeklyAvailability.slots]);
+    return () => unsubscribe();
+  }, [date, therapistUid]);
 
   // Compute dynamic blocks rendered on screen
   const renderedSlots = (() => {
