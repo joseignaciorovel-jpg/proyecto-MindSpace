@@ -78,6 +78,7 @@ export default function App() {
   const [inactivityTimer, setInactivityTimer] = useState<number>(900); // 15 minutes by default (900s)
   const [isAppAutoLocked, setIsAppAutoLocked] = useState<boolean>(false);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [pinInput, setPinInput] = useState("");
 
   // Patient feedback evaluation states
   const [reviewFormState, setReviewFormState] = useState<{
@@ -155,6 +156,19 @@ export default function App() {
   // Listen for Google Auth state
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      const offlineSession = localStorage.getItem("mindspace_offline_clinician_session");
+      if (offlineSession) {
+        try {
+          const parsed = JSON.parse(offlineSession);
+          setUser(parsed);
+          setPortalMode("dashboard");
+          setAuthLoading(false);
+          return;
+        } catch (e) {
+          console.error("Error reading cached clinician session:", e);
+        }
+      }
+
       setUser(currentUser);
       if (currentUser) {
         setPortalMode("dashboard"); // Auto redirect to dashboard once logged in
@@ -262,8 +276,29 @@ export default function App() {
     }
   };
 
+  const handlePinLoginSubmit = () => {
+    setAuthError(null);
+    if (pinInput === "1234" || pinInput === "2026") {
+      const simulatedUser = {
+        uid: "default_psychologist_uid_123",
+        email: "joseignacio.rovel@gmail.com",
+        displayName: "Ps. José Romero Velásquez",
+        photoURL: null
+      };
+      localStorage.setItem("mindspace_offline_clinician_session", JSON.stringify(simulatedUser));
+      setUser(simulatedUser as any as User);
+      setPinInput("");
+      setPortalMode("dashboard");
+      soundFX.playChime();
+    } else {
+      setAuthError("El PIN clínico ingresado es incorrecto. Autorización fallida.");
+      soundFX.playPop();
+    }
+  };
+
   const handleLogout = async () => {
     try {
+      localStorage.removeItem("mindspace_offline_clinician_session");
       await signOut(auth);
       setCachedAccessToken(null);
       setPortalMode("public");
@@ -826,16 +861,48 @@ export default function App() {
 
                         <button
                           onClick={handleLoginGoogle}
-                          className="w-full bg-slate-900 dark:bg-white text-white dark:text-slate-950 rounded-2xl hover:bg-slate-800 dark:hover:bg-slate-205 transition-all py-3.5 text-sm font-extrabold shadow-md flex items-center justify-center gap-2 cursor-pointer animate-pulse-glow"
+                          className="w-full bg-slate-900 border border-slate-950 dark:border-white/20 dark:bg-white text-white dark:text-slate-950 rounded-2xl hover:bg-slate-800 dark:hover:bg-slate-100 transition-all py-3.5 text-sm font-extrabold shadow-md flex items-center justify-center gap-2 cursor-pointer"
                         >
-                          <svg className="w-4 h-4 mr-1 text-white dark:text-slate-955 fill-current" viewBox="0 0 24 24">
+                          <svg className="w-4 h-4 mr-1 text-white dark:text-slate-950 fill-current" viewBox="0 0 24 24">
                             <path d="M12.24 10.285V13.4h6.887C18.2 15.614 15.645 18 12.24 18c-3.86 0-7-3.14-7-7s3.14-7 7-7c1.71 0 3.28.614 4.5 1.74l2.4-2.4C17.435 1.7 15.01 1 12.24 1 6.58 1 2 5.58 2 11.24s4.58 10.24 10.24 10.24c5.79 0 10.24-4.065 10.24-10.24 0-.695-.08-1.355-.22-1.955H12.24z"/>
                           </svg>
                           Ingresar con su cuenta de Google
                         </button>
+
+                        <div className="border-t border-slate-100 dark:border-slate-800/80 pt-5 space-y-3">
+                          <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+                            ⚡ Acceso Clínico Directo con PIN
+                          </p>
+                          <div className="flex gap-2">
+                            <input
+                              type="password"
+                              id="specialist-pin-login-input"
+                              placeholder="Ingrese PIN (Ej: 1234 o 2026)"
+                              value={pinInput}
+                              onChange={(e) => setPinInput(e.target.value)}
+                              className="flex-1 p-3 rounded-xl border border-gray-250 dark:border-slate-800 bg-white dark:bg-slate-950 focus:outline-none focus:ring-1 focus:ring-slate-900 text-center font-mono font-bold text-sm tracking-widest text-slate-850 dark:text-white"
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  handlePinLoginSubmit();
+                                }
+                              }}
+                            />
+                            <button
+                              type="button"
+                              id="specialist-pin-login-btn"
+                              onClick={handlePinLoginSubmit}
+                              className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-3 rounded-xl font-bold text-xs transition-all shadow-sm shrink-0 uppercase tracking-wider cursor-pointer"
+                            >
+                              Entrar
+                            </button>
+                          </div>
+                          <p className="text-[9.5px] text-gray-400 dark:text-slate-500 leading-normal">
+                            Si Google Auth es bloqueado por las políticas de cookies del iframe o popups de su navegador, use el PIN de demostración clínica para conectarse instantáneamente.
+                          </p>
+                        </div>
                         
-                        <p className="text-[10px] text-gray-400 dark:text-slate-500">
-                          Servicios de autenticación autorizados por Firebase Auth.
+                        <p className="text-[10px] text-gray-400 dark:text-slate-500 pt-1">
+                          Servicios de autenticación autorizados de forma privada.
                         </p>
                       </div>
                     );
