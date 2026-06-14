@@ -46,6 +46,7 @@ export default function AbbyAssistant({ mode, therapistUid, therapistName, setti
   const [speechEnabled, setSpeechEnabled] = useState(true);
   const [elevenLabsConfigured, setElevenLabsConfigured] = useState(false);
   const [elevenLabsVoiceId, setElevenLabsVoiceId] = useState("");
+  const [elevenLabsError, setElevenLabsError] = useState<string | null>(null);
   const currentAudioRef = useRef<HTMLAudioElement | null>(null);
 
   // Status check for ElevenLabs API
@@ -222,7 +223,7 @@ export default function AbbyAssistant({ mode, therapistUid, therapistName, setti
       .replace(/[\*\#\_]/g, "")
       .replace(/:\w+:/g, "")
       .trim();
-
+ 
     if (elevenLabsConfigured) {
       try {
         setIsSpeaking(true);
@@ -233,13 +234,14 @@ export default function AbbyAssistant({ mode, therapistUid, therapistName, setti
           },
           body: JSON.stringify({ text: cleanText }),
         });
-
+ 
         if (response.ok) {
+          setElevenLabsError(null); // Clear errors on success
           const audioBlob = await response.blob();
           const audioUrl = URL.createObjectURL(audioBlob);
           const audio = new Audio(audioUrl);
           currentAudioRef.current = audio;
-
+ 
           audio.onended = () => {
             setIsSpeaking(false);
             URL.revokeObjectURL(audioUrl);
@@ -249,17 +251,41 @@ export default function AbbyAssistant({ mode, therapistUid, therapistName, setti
             URL.revokeObjectURL(audioUrl);
             speakWithWebSpeech(cleanText);
           };
-
+ 
           await audio.play();
           return;
         } else {
-          console.warn("ElevenLabs returned non-ok status, falling back.");
+          let errorMsg = `Error ${response.status} de ElevenLabs`;
+          try {
+            const errData = await response.json();
+            if (errData.details) {
+              try {
+                const parsedDetails = JSON.parse(errData.details);
+                if (parsedDetails.detail && parsedDetails.detail.message) {
+                  errorMsg = `${response.status}: ${parsedDetails.detail.message}`;
+                } else if (parsedDetails.message) {
+                  errorMsg = `${response.status}: ${parsedDetails.message}`;
+                } else {
+                  errorMsg = `${response.status}: ${errData.details}`;
+                }
+              } catch (e) {
+                errorMsg = `${response.status}: ${errData.details}`;
+              }
+            } else if (errData.error) {
+              errorMsg = `${response.status}: ${errData.error}`;
+            }
+          } catch (e) {
+            // non-json response
+          }
+          console.warn("ElevenLabs returned non-ok status:", errorMsg);
+          setElevenLabsError(errorMsg);
         }
-      } catch (e) {
+      } catch (e: any) {
         console.warn("ElevenLabs synthesis failed, falling back to browser Native TTS", e);
+        setElevenLabsError(e?.message || String(e));
       }
     }
-
+ 
     // Fallback to Native browser speech engine
     speakWithWebSpeech(cleanText);
   };
@@ -1010,9 +1036,9 @@ export default function AbbyAssistant({ mode, therapistUid, therapistName, setti
             </div>
 
             {speechEnabled && (
-              <div className="text-[10px] bg-slate-900/40 p-2 border border-slate-850 rounded-xl space-y-1">
+              <div className="text-[10px] bg-slate-900/40 p-2.5 border border-slate-850 rounded-xl space-y-1.5">
                 {elevenLabsConfigured ? (
-                  <div className="space-y-1">
+                  <div className="space-y-1.5">
                     <div className="flex items-center justify-between text-teal-400">
                       <span className="flex items-center gap-1 font-bold">✨ Abby HD (ElevenLabs)</span>
                       <span className="text-[8px] bg-teal-500/10 border border-teal-500/30 px-1.5 py-0.5 rounded text-teal-300 font-mono font-bold">ACTIVA</span>
@@ -1022,6 +1048,30 @@ export default function AbbyAssistant({ mode, therapistUid, therapistName, setti
                         Voice ID: <span className="bg-slate-950/50 px-1 py-0.5 rounded">{elevenLabsVoiceId}</span>
                       </p>
                     )}
+                    {elevenLabsError && (
+                      <div className="bg-rose-500/15 border border-rose-500/30 p-2.5 rounded-lg text-rose-300 space-y-1.5 text-[9px] mt-1.5">
+                        <p className="font-bold flex items-center gap-1 text-[10px]">
+                          ⚠️ Error en ElevenLabs: Voz Nativa Activa
+                        </p>
+                        <p className="font-mono text-[8.5px] whitespace-pre-wrap leading-tight bg-black/40 p-1.5 rounded border border-rose-900/30 text-rose-200">
+                          {elevenLabsError}
+                        </p>
+                        <p className="text-[8px] opacity-90 leading-snug pt-1.5 border-t border-rose-500/20">
+                          {elevenLabsError.includes("quota") || elevenLabsError.includes("402") || elevenLabsError.includes("character_limit_exceeded") ? (
+                            <strong>Sugerencia de Cuota:</strong>
+                          ) : elevenLabsError.includes("not found") ? (
+                            <strong>Sugerencia de Voz:</strong>
+                          ) : (
+                            <strong>Sugerencia:</strong>
+                          )}{" "}
+                          {elevenLabsError.includes("quota") || elevenLabsError.includes("402") || elevenLabsError.includes("character_limit_exceeded")
+                            ? "Su cuenta de ElevenLabs agotó los caracteres disponibles. Ingrese a elevenlabs.io, revise su panel de facturación (Billing) y agregue fondos o actualice su plan."
+                            : elevenLabsError.includes("not found")
+                            ? "El ID de voz no existe o no pertenece a su cuenta. Verifique que ELEVENLABS_VOICE_ID coincida con un ID válido de su biblioteca."
+                            : "Verifique que ELEVENLABS_API_KEY y ELEVENLABS_VOICE_ID en Cloud Run sean correctos y válidos."}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="flex items-center justify-between text-gray-500">
@@ -1029,11 +1079,13 @@ export default function AbbyAssistant({ mode, therapistUid, therapistName, setti
                     <span className="text-[8px] bg-slate-800 border border-slate-700 px-1.5 py-0.5 rounded text-gray-400 font-mono" title="Configure su ELEVENLABS_API_KEY en Secrets de AI Studio para activar Voz Ultra-Moderna HD">HD OFF</span>
                   </div>
                 )}
-                <p className="text-[9px] text-slate-500 leading-normal">
-                  {elevenLabsConfigured 
-                    ? "Utilizando síntesis de voz fotorrealista neuronal multilingüe."
-                    : "Sugerencia: Defina ELEVENLABS_API_KEY para habilitar voces fotorrealistas profesionales de ElevenLabs."}
-                </p>
+                {!elevenLabsError && (
+                  <p className="text-[9px] text-slate-500 leading-normal">
+                    {elevenLabsConfigured 
+                      ? "Utilizando síntesis de voz fotorrealista neuronal multilingüe."
+                      : "Sugerencia: Defina ELEVENLABS_API_KEY para habilitar voces fotorrealistas profesionales de ElevenLabs."}
+                  </p>
+                )}
               </div>
             )}
 
@@ -1068,6 +1120,39 @@ export default function AbbyAssistant({ mode, therapistUid, therapistName, setti
                 >
                   💳 Ir a AI Studio para Recargar Créditos Prepago
                 </a>
+              </div>
+            </div>
+          )}
+
+          {elevenLabsError && (
+            <div className="bg-rose-50 border border-rose-300 dark:bg-rose-950/20 dark:border-rose-900/50 p-4 rounded-2xl mb-4 text-xs text-rose-900 dark:text-rose-400 text-left space-y-2 leading-relaxed shadow-sm">
+              <div className="flex items-center gap-2 font-extrabold uppercase tracking-wide text-[10px] text-rose-600 dark:text-rose-400">
+                <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>⚠️ Error de Voz ElevenLabs (Abby HD)</span>
+              </div>
+              <p className="text-[11px]">
+                El servidor está intentando generar voz HD fotorrealista para Abby, pero la API de ElevenLabs ha retornado un error:
+              </p>
+              <div className="bg-rose-100/50 dark:bg-slate-950/80 font-mono text-[10.5px] p-2 rounded border border-rose-200 dark:border-rose-900/30 text-rose-800 dark:text-rose-200 break-words">
+                {elevenLabsError}
+              </div>
+              <p className="text-[11px] font-semibold">
+                Debido a esto, Abby se ve obligada a utilizar la <strong>Voz Estándar del Sistema (síntesis robótica de repuesto)</strong> para hablar sin interrumpir la experiencia.
+              </p>
+              <div className="text-[11px] space-y-1">
+                {elevenLabsError.includes("quota") || elevenLabsError.includes("402") || elevenLabsError.includes("character_limit_exceeded") ? (
+                  <p>
+                    <strong>Cómo solucionarlo:</strong> Su saldo de ElevenLabs o límite de caracteres gratuitos se ha agotado. Ingrese a su panel en <a href="https://elevenlabs.io" target="_blank" rel="noopener noreferrer" className="underline font-bold hover:text-rose-700 text-rose-600">elevenlabs.io</a>, vaya a su perfil/pestaña de Facturación (Billing) y asegúrese de tener caracteres disponibles o actualizar su plan a uno de pago para seguir disfrutando de la voz realista de Abby.
+                  </p>
+                ) : elevenLabsError.includes("not found") ? (
+                  <p>
+                    <strong>Cómo solucionarlo:</strong> La voz con ID <code>{elevenLabsVoiceId}</code> no existe o no pertenece a su cuenta. Verifique que la variable de entorno <code>ELEVENLABS_VOICE_ID</code> esté configurada correctamente en Cloud Run con un ID de voz válido de ElevenLabs.
+                  </p>
+                ) : (
+                  <p>
+                    <strong>Cómo solucionarlo:</strong> Verifique su API Key (<code>ELEVENLABS_API_KEY</code>) y <code>ELEVENLABS_VOICE_ID</code> configurados en sus variables de entorno de Cloud Run.
+                  </p>
+                )}
               </div>
             </div>
           )}
