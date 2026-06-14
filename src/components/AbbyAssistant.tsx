@@ -1012,9 +1012,16 @@ export default function AbbyAssistant({ mode, therapistUid, therapistName, setti
             {speechEnabled && (
               <div className="text-[10px] bg-slate-900/40 p-2 border border-slate-850 rounded-xl space-y-1">
                 {elevenLabsConfigured ? (
-                  <div className="flex items-center justify-between text-teal-400">
-                    <span className="flex items-center gap-1 font-bold">✨ Abby HD (ElevenLabs)</span>
-                    <span className="text-[8px] bg-teal-500/10 border border-teal-500/30 px-1.5 py-0.5 rounded text-teal-300 font-mono font-bold">ACTIVA</span>
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-teal-400">
+                      <span className="flex items-center gap-1 font-bold">✨ Abby HD (ElevenLabs)</span>
+                      <span className="text-[8px] bg-teal-500/10 border border-teal-500/30 px-1.5 py-0.5 rounded text-teal-300 font-mono font-bold">ACTIVA</span>
+                    </div>
+                    {elevenLabsVoiceId && (
+                      <p className="text-[8px] text-teal-500/80 font-mono">
+                        Voice ID: <span className="bg-slate-950/50 px-1 py-0.5 rounded">{elevenLabsVoiceId}</span>
+                      </p>
+                    )}
                   </div>
                 ) : (
                   <div className="flex items-center justify-between text-gray-500">
