@@ -862,26 +862,52 @@ No agregues placeholders adicionales u corchetes como "[Su nombre]", genera un m
   }
 });
 
+// Helper function to get simplified doctor greeting based on time of day
+function getDoctorTimeGreeting(timeStr?: string): string {
+  let hour = new Date().getHours();
+  if (timeStr) {
+    const match = timeStr.match(/(\d+)/);
+    if (match) {
+      let parsedHour = parseInt(match[1], 10);
+      if (timeStr.toLowerCase().includes("p.m.") || timeStr.toLowerCase().includes("pm") || timeStr.toLowerCase().includes("tarde") || timeStr.toLowerCase().includes("noche")) {
+        if (parsedHour < 12) parsedHour += 12;
+      } else if (timeStr.toLowerCase().includes("a.m.") || timeStr.toLowerCase().includes("am") || timeStr.toLowerCase().includes("mañana")) {
+        if (parsedHour === 12) parsedHour = 0;
+      }
+      hour = parsedHour;
+    }
+  }
+  if (hour >= 5 && hour < 12) {
+    return "Hola Doctor, buenos días.";
+  } else if (hour >= 12 && hour < 20) {
+    return "Hola Doctor, buenas tardes.";
+  } else {
+    return "Hola Doctor, buenas noches.";
+  }
+}
+
 // Helper function for Abby's offline-fallback simulator
-function getAbbyLocalFallback(userQuery: string, appointmentsText: string, therapistName: string) {
+function getAbbyLocalFallback(userQuery: string, appointmentsText: string, therapistName: string, currentTime?: string) {
   const lower = userQuery.toLowerCase();
   let reply = "";
   let triggerAction = "none";
   const reason = "Simulación por contingencia de red o API.";
 
+  const greeting = getDoctorTimeGreeting(currentTime);
+
   if (lower.includes("suspend") || lower.includes("urgenc") || lower.includes("cancel") || lower.includes("emergenc")) {
     triggerAction = "suspend_today";
-    reply = `Entiendo perfectamente, doctor ${therapistName || "José Ignacio Rovel"}. Comprendo la gravedad de la situación. No se preocupe de nada ahora: he preparado la suspensión inmediata de la agenda de hoy para desplegar el panel de emergencia y proceder a notificar de inmediato a sus pacientes.`;
+    reply = `${greeting} Comprendo la urgencia de la situación. No se preocupe: iniciaré de inmediato el protocolo de suspensión para el día de hoy y notificaré a sus pacientes agendados. ¿Necesita algo más?`;
   } else if (lower.includes("quien") || lower.includes("paciente") || lower.includes("ahora") || lower.includes("prox") || lower.includes("agenda") || lower.includes("cita")) {
     triggerAction = "check_appointments";
     const apptsFiltered = appointmentsText && appointmentsText.trim() !== "No hay consultas o pacientes registrados para el día de hoy."
       ? appointmentsText.trim() 
-      : "No registra consultas o pacientes para el día de hoy de momento.";
-    reply = `De acuerdo al estado de la agenda para hoy, doctor: ${apptsFiltered} ¿Desea realizar alguna modificación o reprogramación?`;
+      : "No registra consultas o pacientes para el día de hoy.";
+    reply = `${greeting} El estado actual de sus pacientes de hoy es: ${apptsFiltered}. ¿Necesita algo más?`;
   } else if (lower.includes("hola") || lower.includes("buenos") || lower.includes("buenas") || lower.includes("abby") || lower.includes("avi")) {
-    reply = `¡Hola, doctor ${therapistName || "José Ignacio Rovel"}! Le saluda Abby, su asistente virtual. Estoy lista y atenta aquí de forma discreta para procesar de inmediato sus comandos de voz y asistirle con su agenda de hoy.`;
+    reply = `${greeting} Estoy lista para ayudarle de manera directa con su agenda. ¿Necesita algo más?`;
   } else {
-    reply = `Entiendo su indicación perfectamente, doctor. He tomado registro y estoy lista para procesarla administrativamente en su agenda y fichas clínicas.`;
+    reply = `${greeting} He recibido su comando correctamente para procesarlo administrativamente de manera inmediata. ¿Necesita algo más?`;
   }
 
   return { reply, triggerAction, reason };
@@ -899,7 +925,7 @@ app.post("/api/gemini/abby", async (req, res) => {
   const hasRealKey = apiKey && apiKey !== "MOCK_KEY" && apiKey.trim().length > 0;
 
   if (!hasRealKey) {
-    const fallbackResponse = getAbbyLocalFallback(userQuery, appointmentsText, therapistName);
+    const fallbackResponse = getAbbyLocalFallback(userQuery, appointmentsText, therapistName, currentTime);
     return res.json({
       ...fallbackResponse,
       diagnostics: {
@@ -938,27 +964,36 @@ Formato esperado de respuesta (JSON únicamente):
 No uses markdown rodeando el JSON ni bloques de código que lo impidan parsear, o alternativamente asegúrate de que sea JSON válido.`;
     } else {
       prompt = `Actúa como Abby, la asistente administrativa virtual de inteligencia artificial del psicólogo/a clínico ${therapistName || "José Ignacio Rovel"}.
-Tu tono debe ser excepcionalmente empático, profesional, claro y respetuoso, utilizando leves giros de lenguaje chilenos cálidos de ambiente clínico para transmitir cercanía ("entiendo perfectamente", "por supuesto", "cuente con ello", "ningun problema").
-Estás brindando soporte directo al profesional en su panel privado.
+Estás brindando soporte directo al profesional en su panel privado de forma directa, ágil y práctica.
+
+REGLAS CRÍTICAS DE EXPERIENCIA Y TONO (EVITA LA FORMALIDAD EXCESIVA):
+1. NO emitas introducciones largas, frases repetitivas de relleno, o afirmaciones que consuman tokens innecesarios (por ejemplo, elimina frases como "Por supuesto, entiendo perfectamente su consulta", "Déjeme revisar de inmediato el sistema", "Deme solo un segundito y ya le muestro", "cuente con ello", etc.). Ve directo a la información.
+2. La estructura del campo "reply" DEBE constar únicamente de:
+   - SALUDO INICIAL (basado estrictamente en la hora actual del sistema '${currentTime || "00:00"}'):
+     - Si la hora corresponde a la mañana (05:00 a 11:59): "Hola Doctor, buenos días."
+     - Si la hora corresponde a la tarde (12:00 a 19:59): "Hola Doctor, buenas tardes."
+     - Si la hora corresponde a la noche o madrugada (20:00 a 04:59): "Hola Doctor, buenas noches."
+   - INFORMACIÓN SOLICITADA: Presentada de forma muy sencilla, resumida y directa, resolviendo de inmediato el requerimiento del profesional.
+   - PREGUNTA DE CIERRE: Termina siempre preguntando únicamente: "¿Necesita algo más?" o "¿Desea ayuda con algo más, Doctor?". No agregues más despedidas redundantes.
 
 Información sobre el estado de la agenda y clínica hoy:
 - Hora actual del sistema: ${currentTime || new Date().toLocaleTimeString()}
 - Pacientes agendados y confirmados para el día de HOY:
-${appointmentsText || "No hay consultas o pacientes registrados para el día de hoy."}
+${appointmentsText || "No hay consultas o pacientes registrados para el día de HOY."}
 
-Analiza con discernimiento el siguiente requerimiento o frase dictada por el profesional:
+Pregunta o instrucción dictada por el profesional:
 "${userQuery}"
 
 Reglas Críticas de Respuesta (Debes retornar un JSON estricto con las llaves requeridas):
-1. Si el profesional indica explícitamente o insinúa claramente que debe suspender las sesiones de hoy o reprogramar de emergencia las citas de la tarde debido a un inconveniente (ej. "debo acudir a urgencias con mi hija", "cancela las citas de hoy", "suspende la agenda por emergencia"), tu campo de "triggerAction" DEBE ser "suspend_today". Redacta una respuesta sumamente contenedora diciendo que te encargarás de notificarles de inmediato, que lo primero es la salud o emergencia familiar y que liberarás la agenda para hoy mismo mientras les propones reagendar en bloques disponibles.
+1. Si el profesional indica explícitamente o insinúa claramente que debe suspender las sesiones de hoy o reprogramar de emergencia debido a un inconveniente (ej. "debo acudir a urgencias con mi hija", "cancela las citas de hoy", "suspende la agenda por emergencia"), tu campo de "triggerAction" DEBE ser "suspend_today". Redacta una respuesta muy directa y contenedora diciendo que suspenderás la agenda de hoy para iniciar las notificaciones de emergencia inmediatamente.
 2. Si pregunta por su próximo paciente, quién atiende ahora, o el estado actual de las citas, el triggerAction de ser "check_appointments".
 3. En cualquier otro caso académico o administrativo común, usa triggerAction: "none".
 
 Formato esperado de respuesta (JSON únicamente):
 {
-  "reply": "Tu mensaje para que Abby hable con el profesional de forma afectuosa.",
+  "reply": "Hola Doctor, [saludo según horario]. [Información resumida]. ¿Necesita algo más?",
   "triggerAction": "suspend_today" | "check_appointments" | "none",
-  "reason": "Breve nota interna de lo detectado."
+  "reason": "Nota breve del motivo académico."
 }
 
 No uses markdown rodeando el JSON ni bloques de código que lo impidan parsear, o alternativamente asegúrate de que sea JSON válido.`;
