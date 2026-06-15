@@ -6,6 +6,32 @@ import BookingCalendar from "./BookingCalendar";
 import { soundFX } from "../utils/soundFX";
 import { motion, AnimatePresence } from "motion/react";
 
+function normalizeDateStr(dStr: any): string {
+  if (!dStr) return "";
+  const str = String(dStr).trim();
+  const parts = str.split(/[-/]/);
+  if (parts.length === 3) {
+    let y = "";
+    let m = "";
+    let d = "";
+    if (parts[0].length === 4) {
+      // YYYY-MM-DD
+      y = parts[0];
+      m = String(parseInt(parts[1], 10));
+      d = String(parseInt(parts[2], 10));
+    } else if (parts[2].length === 4) {
+      // DD-MM-YYYY
+      y = parts[2];
+      m = String(parseInt(parts[1], 10));
+      d = String(parseInt(parts[0], 10));
+    } else {
+      return str;
+    }
+    return `${y}-${m}-${d}`;
+  }
+  return str;
+}
+
 // Local helper to track errors on Firestore
 enum OperationType {
   CREATE = "create",
@@ -21,9 +47,10 @@ interface PatientPortalProps {
   therapistName: string;
   sessionPrice: number;
   onJoinCall: (roomId: string) => void;
+  settings?: any;
 }
 
-export default function PatientPortal({ therapistUid, therapistName, sessionPrice, onJoinCall }: PatientPortalProps) {
+export default function PatientPortal({ therapistUid, therapistName, sessionPrice, onJoinCall, settings = null }: PatientPortalProps) {
   // Sync Credential States
   const [patientRut, setPatientRut] = useState("");
   const [patientEmail, setPatientEmail] = useState("");
@@ -660,7 +687,9 @@ export default function PatientPortal({ therapistUid, therapistName, sessionPric
         price: app.price || 50000,
         patientEmail: app.patientEmail || patientEmail,
         patientName: app.patientName,
-        patientRut: app.patientRut || patientRut
+        patientRut: app.patientRut || patientRut,
+        origin: window.location.origin,
+        useSandbox: settings?.flowSandboxMode !== false
       };
 
       const res = await fetch("/api/flow/create-payment", {

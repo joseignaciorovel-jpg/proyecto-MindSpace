@@ -5,6 +5,32 @@ import { Appointment } from "../types";
 import { Calendar as CalendarIcon, Clock, CreditCard, ShieldCheck, Mail, CheckCircle2, AlertTriangle, MessageSquare, Info, ZoomIn, ZoomOut, Home, Heart } from "lucide-react";
 import { getCachedAccessToken, sendGmail } from "../utils/googleAuth";
 
+function normalizeDateStr(dStr: any): string {
+  if (!dStr) return "";
+  const str = String(dStr).trim();
+  const parts = str.split(/[-/]/);
+  if (parts.length === 3) {
+    let y = "";
+    let m = "";
+    let d = "";
+    if (parts[0].length === 4) {
+      // YYYY-MM-DD
+      y = parts[0];
+      m = String(parseInt(parts[1], 10));
+      d = String(parseInt(parts[2], 10));
+    } else if (parts[2].length === 4) {
+      // DD-MM-YYYY
+      y = parts[2];
+      m = String(parseInt(parts[1], 10));
+      d = String(parseInt(parts[0], 10));
+    } else {
+      return str;
+    }
+    return `${y}-${m}-${d}`;
+  }
+  return str;
+}
+
 interface BookingCalendarProps {
   therapistUid: string;
   therapistName: string;
@@ -14,6 +40,7 @@ interface BookingCalendarProps {
   initialName?: string;
   initialPhone?: string;
   compact?: boolean;
+  settings?: any;
 }
 
 export default function BookingCalendar({
@@ -25,6 +52,7 @@ export default function BookingCalendar({
   initialName = "",
   initialPhone = "",
   compact = false,
+  settings = null,
 }: BookingCalendarProps) {
   // Booking state
   const [date, setDate] = useState("");
@@ -187,41 +215,54 @@ export default function BookingCalendar({
   };
 
   // Real-time double-booking checking and filtering
+  const [allAppointments, setAllAppointments] = useState<Appointment[]>([]);
   const [bookedSlots, setBookedSlots] = useState<string[]>([]);
   const [checkingAvailability, setCheckingAvailability] = useState(false);
 
+  // 1. Unified Real-time Subscription to ALL appointments for this therapist (same as ClinicianAgenda)
+  useEffect(() => {
+    if (!therapistUid) return;
+
+    const q = query(
+      collection(db, "appointments"),
+      where("ownerId", "==", therapistUid)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const appts: Appointment[] = [];
+      snapshot.forEach((docSnap) => {
+        appts.push({ id: docSnap.id, ...docSnap.data() } as Appointment);
+      });
+      setAllAppointments(appts);
+    }, (error) => {
+      console.error("Error subscribing to therapist appointments in BookingCalendar:", error);
+    });
+
+    return () => unsubscribe();
+  }, [therapistUid]);
+
+  // 2. React to active date selection and automatically filter matched unavailable slots
   useEffect(() => {
     if (!date) {
       setBookedSlots([]);
+      setCheckingAvailability(false);
       return;
     }
 
     setCheckingAvailability(true);
     
-    // Subscribe in real-time to all appointments for this clinician and date
-    const q = query(
-      collection(db, "appointments"),
-      where("ownerId", "==", therapistUid),
-      where("date", "==", date)
-    );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const booked: string[] = [];
-      snapshot.forEach((docSnap) => {
-        const data = docSnap.data();
-        if (data && data.status !== "canceled") {
-          booked.push(data.timeSlot);
-        }
-      });
-      setBookedSlots(booked);
-      setCheckingAvailability(false);
-    }, (error) => {
-      console.error("Error subscribing to appointments for date:", error);
-      setCheckingAvailability(false);
-    });
-
-    return () => unsubscribe();
-  }, [date, therapistUid]);
+    // Look for scheduled, pending, or completed appointments on this exact date
+    const booked = allAppointments
+      .filter((appt) => {
+        const isSameDate = normalizeDateStr(appt.date) === normalizeDateStr(date);
+        const isActive = appt.status !== "canceled";
+        return isSameDate && isActive;
+      })
+      .map((appt) => appt.timeSlot);
+      
+    setBookedSlots(booked);
+    setCheckingAvailability(false);
+  }, [date, allAppointments]);
 
   // Compute dynamic blocks rendered on screen
   const renderedSlots = (() => {
@@ -424,7 +465,9 @@ export default function BookingCalendar({
           price: sessionPrice,
           patientEmail: email,
           patientName: name,
-          patientRut: rut
+          patientRut: rut,
+          origin: window.location.origin,
+          useSandbox: settings?.flowSandboxMode !== false
         })
       });
 

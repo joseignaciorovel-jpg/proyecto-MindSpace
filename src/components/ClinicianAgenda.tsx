@@ -9,6 +9,32 @@ import {
 } from "lucide-react";
 import { getCachedAccessToken, sendGmail } from "../utils/googleAuth";
 
+function normalizeDateStr(dStr: any): string {
+  if (!dStr) return "";
+  const str = String(dStr).trim();
+  const parts = str.split(/[-/]/);
+  if (parts.length === 3) {
+    let y = "";
+    let m = "";
+    let d = "";
+    if (parts[0].length === 4) {
+      // YYYY-MM-DD
+      y = parts[0];
+      m = String(parseInt(parts[1], 10));
+      d = String(parseInt(parts[2], 10));
+    } else if (parts[2].length === 4) {
+      // DD-MM-YYYY
+      y = parts[2];
+      m = String(parseInt(parts[1], 10));
+      d = String(parseInt(parts[0], 10));
+    } else {
+      return str;
+    }
+    return `${y}-${m}-${d}`;
+  }
+  return str;
+}
+
 interface ClinicianAgendaProps {
   therapistUid: string;
   onJoinCall: (roomId: string, patientMeta?: { id?: string; name?: string; appointmentId?: string }) => void;
@@ -1896,7 +1922,7 @@ export default function ClinicianAgenda({ therapistUid, onJoinCall }: ClinicianA
                 const isHoliday = CHILEAN_HOLIDAYS_2026_2027.some(h => h.date === dayMeta.dateStr);
                 const holidayInfo = CHILEAN_HOLIDAYS_2026_2027.find(h => h.date === dayMeta.dateStr);
                 const isSuspendedFull = suspensions.some(s => s.date === dayMeta.dateStr && s.type === "full_day");
-                const dayActiveAppts = appointments.filter(a => a.date === dayMeta.dateStr && a.status !== "canceled").length;
+                const dayActiveAppts = appointments.filter(a => normalizeDateStr(a.date) === normalizeDateStr(dayMeta.dateStr) && a.status !== "canceled").length;
                 
                 return (
                   <button
@@ -1986,7 +2012,7 @@ export default function ClinicianAgenda({ therapistUid, onJoinCall }: ClinicianA
             {/* TIMELINE LIST */}
             <div className="divide-y divide-gray-100 bg-white">
               {timeSlots.map((slot) => {
-                const appt = appointments.find(a => a.date === calendarSelectedDate && a.timeSlot === slot);
+                const appt = appointments.find(a => normalizeDateStr(a.date) === normalizeDateStr(calendarSelectedDate) && a.timeSlot === slot);
                 const isSuspended = suspensions.some(s => s.date === calendarSelectedDate && (s.type === "full_day" || (s.type === "slots" && s.slots?.includes(slot))));
                 const specificSlotSuspension = suspensions.find(s => s.date === calendarSelectedDate && (s.type === "full_day" || (s.type === "slots" && s.slots?.includes(slot))));
                 

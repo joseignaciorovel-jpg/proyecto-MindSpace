@@ -97,6 +97,7 @@ export interface ClinicSettings {
   passcode2FAEnabled?: boolean;
   passcodePIN?: string;
   isMaxSecurityEnforced?: boolean;
+  flowSandboxMode?: boolean;
 }
 
 export interface SecureCallKey {

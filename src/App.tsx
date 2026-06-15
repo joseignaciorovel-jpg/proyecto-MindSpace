@@ -727,6 +727,7 @@ export default function App() {
                     therapistUid={therapistUid}
                     therapistName={therapistName}
                     sessionPrice={sessionPrice}
+                    settings={settings}
                   />
                 </div>
               </div>
@@ -737,6 +738,7 @@ export default function App() {
                   therapistName={therapistName}
                   sessionPrice={sessionPrice}
                   onJoinCall={(roomId) => setActiveCallRoomId(roomId)}
+                  settings={settings}
                 />
               </div>
             ) : (

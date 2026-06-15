@@ -102,7 +102,7 @@ function hasRealFlowCredentials(): boolean {
 
 // Flow payment and LibreDTE BHE automation endpoints (Chilean SII context for 2026)
 app.post("/api/flow/create-payment", async (req, res) => {
-  const { appointmentId, price, patientEmail, patientName, patientRut } = req.body;
+  const { appointmentId, price, patientEmail, patientName, patientRut, origin, useSandbox } = req.body;
   
   if (!appointmentId || !price) {
     return res.status(400).json({ error: "Faltan parámetros para preparar el cobro en Flow." });
@@ -113,11 +113,26 @@ app.post("/api/flow/create-payment", async (req, res) => {
   const flowApiUrl = process.env.FLOW_API_URL || "https://www.flow.cl/api";
   const numAmount = Number(price);
 
-  // If real Flow credentials are set up, attempt genuine Flow creation!
-  if (hasRealFlowCredentials() && flowApiKey && flowSecretKey) {
+  // If real Flow credentials are set up and useSandbox is NOT explicitly chosen, attempt genuine Flow creation!
+  if (hasRealFlowCredentials() && flowApiKey && flowSecretKey && useSandbox !== true) {
     try {
       console.log("[Flow Real API] Initiating transaction with Flow API keys...");
-      const baseUrl = process.env.APP_URL || "http://localhost:3000";
+      
+      let devOrigin = origin;
+      if (!devOrigin && req.headers.referer) {
+        try {
+          const u = new URL(req.headers.referer);
+          devOrigin = u.origin;
+        } catch (_) {}
+      }
+      if (!devOrigin) {
+        const host = req.get('host') || req.headers.host;
+        if (host) {
+          const proto = req.headers['x-forwarded-proto'] || (host.includes('localhost') ? 'http' : 'https');
+          devOrigin = `${proto}://${host}`;
+        }
+      }
+      const baseUrl = devOrigin || process.env.APP_URL || "http://localhost:3000";
       
       const payload: Record<string, any> = {
         apiKey: flowApiKey,

@@ -98,6 +98,7 @@ export default function ClinicianSettings({ therapistUid, currentSettings, onSet
   const [passcode2FAEnabled, setPasscode2FAEnabled] = useState(false);
   const [passcodePIN, setPasscodePIN] = useState("");
   const [isMaxSecurityEnforced, setIsMaxSecurityEnforced] = useState(false);
+  const [flowSandboxMode, setFlowSandboxMode] = useState(true);
   
   // Submit/Saving states
   const [isSaving, setIsSaving] = useState(false);
@@ -166,6 +167,7 @@ export default function ClinicianSettings({ therapistUid, currentSettings, onSet
       setPasscode2FAEnabled(currentSettings.passcode2FAEnabled || false);
       setPasscodePIN(currentSettings.passcodePIN || "");
       setIsMaxSecurityEnforced(currentSettings.isMaxSecurityEnforced || false);
+      setFlowSandboxMode(currentSettings.flowSandboxMode !== false);
     } else {
       setTherapistName("Ps. José Ignacio Rovel");
       setTherapistTitle("Psicólogo Clínico Adultos | Magíster en Psicoterapia Constructivista");
@@ -186,6 +188,7 @@ export default function ClinicianSettings({ therapistUid, currentSettings, onSet
       setPasscode2FAEnabled(false);
       setPasscodePIN("");
       setIsMaxSecurityEnforced(false);
+      setFlowSandboxMode(true);
     }
   }, [currentSettings]);
 
@@ -279,6 +282,7 @@ export default function ClinicianSettings({ therapistUid, currentSettings, onSet
       passcode2FAEnabled,
       passcodePIN: passcodePIN.trim(),
       isMaxSecurityEnforced,
+      flowSandboxMode,
       updatedAt: Timestamp.now(),
       ownerId: docId
     };
@@ -873,6 +877,43 @@ export default function ClinicianSettings({ therapistUid, currentSettings, onSet
                   <p className="text-[11px] text-gray-500 leading-normal font-sans">
                     La consulta procesa cobros en pesos chilenos (CLP) mediante Webpay / Flow. Los datos a continuación son meramente de referencia local para tu contabilidad o para ofrecer transferencias directas/manuales si tus pacientes lo prefieren. Los fondos generales de tus reservas se depositan según tus plazos definidos en Flow.cl.
                   </p>
+
+                  {/* Toggling Sandbox Mode */}
+                  <div className="bg-slate-100 dark:bg-slate-900 border border-slate-205 dark:border-slate-800 p-3.5 rounded-2xl space-y-2 text-left">
+                    <span className="text-[10px] font-extrabold uppercase text-slate-500 tracking-wider block">Entorno de Operaciones (Flow 🇨🇱)</span>
+                    
+                    <div className="flex gap-1 bg-slate-200 dark:bg-slate-800 p-1 rounded-xl">
+                      <button
+                        type="button"
+                        onClick={() => setFlowSandboxMode(true)}
+                        className={`flex-1 py-1 px-2 rounded-lg text-[11px] font-bold transition-all duration-150 cursor-pointer ${
+                          flowSandboxMode 
+                            ? "bg-white dark:bg-slate-950 text-emerald-600 dark:text-emerald-400 shadow-xs" 
+                            : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+                        }`}
+                      >
+                        🧪 Sandbox (Pruebas)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFlowSandboxMode(false)}
+                        className={`flex-1 py-1 px-2 rounded-lg text-[11px] font-bold transition-all duration-150 cursor-pointer ${
+                          !flowSandboxMode 
+                            ? "bg-white dark:bg-slate-950 text-indigo-600 dark:text-indigo-400 shadow-xs" 
+                            : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+                        }`}
+                      >
+                        ⚡ Producción (Real)
+                      </button>
+                    </div>
+
+                    <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-normal font-sans">
+                      {flowSandboxMode 
+                        ? "✓ Modo simulado activo: Webpay / Flow actuará en Sandbox (sin cobro real)."
+                        : "✓ Producción activado: Se intentarán realizar transacciones reales de Flow."
+                      }
+                    </p>
+                  </div>
 
                   {stripeConnected ? (
                     <div className="bg-emerald-50/50 dark:bg-emerald-905/25 border border-emerald-100 dark:border-emerald-900 rounded-2xl p-4 space-y-3">
