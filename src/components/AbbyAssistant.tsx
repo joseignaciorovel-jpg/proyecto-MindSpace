@@ -1358,7 +1358,7 @@ export default function AbbyAssistant({ mode, therapistUid, therapistName, setti
 
   // Else, Render PUBLIC client orientation widget (floating corner tool)
   return (
-    <div id="abby-public-widget" className="fixed bottom-6 right-6 z-50 font-sans pointer-events-auto">
+    <div id="abby-public-widget" className="fixed bottom-6 right-6 z-50 font-sans pointer-events-auto flex flex-col items-end">
       <AnimatePresence>
         {isWidgetOpen && (
           <motion.div
