@@ -700,16 +700,18 @@ export default function PatientPortal({ therapistUid, therapistName, sessionPric
         body: JSON.stringify(payload)
       });
 
-      if (!res.ok) {
-        throw new Error("No se pudo conectar con el servidor de pagos.");
+      let data;
+      try {
+        data = await res.json();
+      } catch (e) {
+        throw new Error("No se pudo descifrar la respuesta del servidor de pagos.");
       }
 
-      const data = await res.json();
-      if (data.success && data.paymentUrl) {
-        window.location.href = data.paymentUrl;
-      } else {
-        throw new Error(data.error || "Respuesta inválida de la pasarela.");
+      if (!res.ok || !data.success || !data.paymentUrl) {
+        throw new Error(data?.error || "Respuesta inválida de la pasarela.");
       }
+
+      window.location.href = data.paymentUrl;
     } catch (err: any) {
       console.error("Error con cobro Flow:", err);
       if (err instanceof Error) {
@@ -1361,6 +1363,7 @@ export default function PatientPortal({ therapistUid, therapistName, sessionPric
                       initialName={appointments[0]?.patientName || patientEmail.split("@")[0] || ""}
                       initialPhone={appointments[0]?.patientPhone || ""}
                       compact={true}
+                      settings={settings}
                     />
                   </div>
                 </div>

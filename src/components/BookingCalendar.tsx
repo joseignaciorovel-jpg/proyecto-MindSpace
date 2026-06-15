@@ -471,13 +471,15 @@ export default function BookingCalendar({
         })
       });
 
-      if (!payRes.ok) {
-        throw new Error("No se pudo establecer comunicación segura con el servidor de pagos.");
+      let paymentResult;
+      try {
+        paymentResult = await payRes.json();
+      } catch (e) {
+        throw new Error("No se pudo descifrar la respuesta del servidor de pagos.");
       }
 
-      const paymentResult = await payRes.json();
-      if (!paymentResult.success || !paymentResult.paymentUrl) {
-        throw new Error(paymentResult.error || "No se recibió un enlace de redirección válido desde Flow.");
+      if (!payRes.ok || !paymentResult.success || !paymentResult.paymentUrl) {
+        throw new Error(paymentResult?.error || "La inicialización de Flow falló. Compruebe la configuración de sus API keys.");
       }
 
       // 3. Perfect redirection to Flow gateway

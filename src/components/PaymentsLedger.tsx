@@ -333,10 +333,10 @@ export default function PaymentsLedger({ therapistUid }: PaymentsLedgerProps) {
           {renderMonthlyChart()}
           <div className="bg-slate-900 text-white p-4 rounded-xl border border-slate-950 text-xs mt-4">
             <h5 className="font-bold flex items-center gap-1.5 mb-2">
-              <Receipt className="w-4 h-4 text-emerald-400" /> Conciliación Digital Stripe
+              <Receipt className="w-4 h-4 text-emerald-400" /> Conciliación Digital Flow
             </h5>
             <p className="text-slate-300 leading-relaxed">
-              Las transacciones registradas de forma pública en su sitio para pacientes se concilian automáticamente mediante tokens cifrados de Stripe Sandbox.
+              Las transacciones registradas de forma pública en su sitio para pacientes se concilian mediante la pasarela segura Flow.cl, automatizando la emisión de Boletas de Honorarios Electrónicas (BHE) en el SII.
             </p>
           </div>
         </div>
@@ -382,13 +382,13 @@ export default function PaymentsLedger({ therapistUid }: PaymentsLedgerProps) {
 
                     {tx.paymentStatus === "paid" && (
                       <a
-                        href={`https://stripe-sandbox.receipts.com/ch_${tx.id}`}
+                        href={tx.boletaUrl || `/api/flow/receipt?id=${tx.id}`}
                         target="_blank"
                         rel="noreferrer"
-                        className="text-slate-400 hover:text-slate-900 p-1.5 border border-slate-100 rounded-lg hover:border-slate-300 transition-all"
-                        title="Ver Recibo Original de Checkout Stripe"
+                        className="text-slate-400 hover:text-slate-900 p-1.5 border border-slate-100 rounded-lg hover:border-slate-300 transition-all font-sans flex items-center justify-center gap-1"
+                        title="Ver Boleta de Honorarios Electrónica (BHE) o Comprobante"
                       >
-                        <ExternalLink className="w-3.5 h-3.5" />
+                        <ExternalLink className="w-3.5 h-3.5 text-emerald-600" />
                       </a>
                     )}
                   </div>

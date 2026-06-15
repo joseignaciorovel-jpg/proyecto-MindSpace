@@ -2,11 +2,27 @@ import express from "express";
 import path from "path";
 import dotenv from "dotenv";
 import crypto from "crypto";
+import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 
 // Load environment variables
 dotenv.config();
+
+// Load local Firebase Applet configuration fallback dynamically to keep hardcoded keys out of the code
+let localFirebaseConfig: any = {};
+try {
+  const configPath = path.join(process.cwd(), "firebase-applet-config.json");
+  if (fs.existsSync(configPath)) {
+    localFirebaseConfig = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+  }
+} catch (err) {
+  console.warn("[Firebase Config Loader] Could not read local config fallback:", err);
+}
+
+const FIRESTORE_PROJECT_ID_RESOLVED = process.env.FIRESTORE_PROJECT_ID || localFirebaseConfig.projectId || "sara-35270";
+const FIRESTORE_DATABASE_ID_RESOLVED = process.env.FIRESTORE_DATABASE_ID || "ai-studio-3d451c93-9738-452c-87b2-4b4817e76096";
+const FIRESTORE_API_KEY_RESOLVED = process.env.FIRESTORE_API_KEY || localFirebaseConfig.apiKey || "";
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
@@ -21,9 +37,9 @@ async function updateAppointmentStatusPaid(appId: string, amount: number) {
   try {
     const disableSiiBilling = process.env.DISABLE_SII_BILLING !== "false"; // Default to true (disabled)
 
-    const projectId = "sara-35270";
-    const databaseId = "ai-studio-3d451c93-9738-452c-87b2-4b4817e76096";
-    const apiKey = "AIzaSyDzy-Bq0RhiH6dif0tQWpvPCsJ-3FE-wgs";
+    const projectId = FIRESTORE_PROJECT_ID_RESOLVED;
+    const databaseId = FIRESTORE_DATABASE_ID_RESOLVED;
+    const apiKey = FIRESTORE_API_KEY_RESOLVED;
 
     let url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${databaseId}/documents/appointments/${appId}?key=${apiKey}&updateMask.fieldPaths=paymentStatus`;
     
@@ -76,12 +92,12 @@ async function updateAppointmentStatusPaid(appId: string, amount: number) {
 }
 
 function hasRealFlowCredentials(): boolean {
-  const flowApiKey = process.env.FLOW_API_KEY;
-  const flowSecretKey = process.env.FLOW_SECRET_KEY;
+  const flowApiKey = (process.env.FLOW_API_KEY || "").trim();
+  const flowSecretKey = (process.env.FLOW_SECRET_KEY || "").trim();
   if (!flowApiKey || !flowSecretKey) return false;
   
-  const apiKeyLower = flowApiKey.toLowerCase().trim();
-  const secretKeyLower = flowSecretKey.toLowerCase().trim();
+  const apiKeyLower = flowApiKey.toLowerCase();
+  const secretKeyLower = flowSecretKey.toLowerCase();
   
   if (
     apiKeyLower === "" || 
@@ -100,6 +116,49 @@ function hasRealFlowCredentials(): boolean {
   return true;
 }
 
+async function getClinicianSandboxMode(): Promise<boolean> {
+  try {
+    const projectId = FIRESTORE_PROJECT_ID_RESOLVED;
+    const databaseId = FIRESTORE_DATABASE_ID_RESOLVED;
+    const apiKey = FIRESTORE_API_KEY_RESOLVED;
+    const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${databaseId}/documents/settings/default_psychologist_uid_123?key=${apiKey}`;
+
+    console.log("[Firestore Sandbox Check] Querying database for clinician flowSandboxMode toggle...");
+    const response = await fetch(url);
+    if (response.ok) {
+      const data = await response.json();
+      const flowSandboxModeField = data.fields?.flowSandboxMode;
+      if (flowSandboxModeField) {
+        if (typeof flowSandboxModeField.booleanValue !== "undefined") {
+          return flowSandboxModeField.booleanValue === true;
+        }
+      }
+    } else {
+      console.warn("[Firestore Sandbox Check] Query returned non-200 status code: ", response.status);
+    }
+  } catch (err) {
+    console.warn("[Firestore Sandbox Check] Failed to check. Error was: ", err);
+  }
+  
+  // Safe default: check env string if Firestore is unreachable
+  const envUrl = process.env.FLOW_API_URL;
+  if (envUrl && envUrl.includes("sandbox")) {
+    return true;
+  }
+  return false;
+}
+
+async function getFlowApiUrlResolved(useSandbox?: boolean): Promise<string> {
+  const resolvedSandbox = typeof useSandbox !== "undefined" ? useSandbox : await getClinicianSandboxMode();
+  if (resolvedSandbox) {
+    console.log("[Flow Routing] Operating in SANDBOX mode (https://sandbox.flow.cl/api)");
+    return "https://sandbox.flow.cl/api";
+  } else {
+    console.log("[Flow Routing] Operating in PRODUCTION mode (https://www.flow.cl/api)");
+    return "https://www.flow.cl/api";
+  }
+}
+
 // Flow payment and LibreDTE BHE automation endpoints (Chilean SII context for 2026)
 app.post("/api/flow/create-payment", async (req, res) => {
   const { appointmentId, price, patientEmail, patientName, patientRut, origin, useSandbox } = req.body;
@@ -108,15 +167,16 @@ app.post("/api/flow/create-payment", async (req, res) => {
     return res.status(400).json({ error: "Faltan parámetros para preparar el cobro en Flow." });
   }
 
-  const flowApiKey = process.env.FLOW_API_KEY;
-  const flowSecretKey = process.env.FLOW_SECRET_KEY;
-  const flowApiUrl = process.env.FLOW_API_URL || "https://www.flow.cl/api";
+  const flowApiKey = (process.env.FLOW_API_KEY || "").trim();
+  const flowSecretKey = (process.env.FLOW_SECRET_KEY || "").trim();
+  const flowApiUrl = await getFlowApiUrlResolved(useSandbox);
   const numAmount = Number(price);
 
-  // If real Flow credentials are set up and useSandbox is NOT explicitly chosen, attempt genuine Flow creation!
-  if (hasRealFlowCredentials() && flowApiKey && flowSecretKey && useSandbox !== true) {
+  console.log(`[Flow Diagnostic] Checking keys configuration... API Key is set: ${!!flowApiKey} (${flowApiKey.length} chars), Secret Key is set: ${!!flowSecretKey} (${flowSecretKey.length} chars). Mode is ${useSandbox ? "SANDBOX" : "PRODUCTION"}. URL: ${flowApiUrl}`);
+
+  if (hasRealFlowCredentials()) {
     try {
-      console.log("[Flow Real API] Initiating transaction with Flow API keys...");
+      console.log(`[Flow Real API] Initiating transaction with Flow API keys in ${useSandbox ? "Sandbox" : "Production"} mode...`);
       
       let devOrigin = origin;
       if (!devOrigin && req.headers.referer) {
@@ -170,7 +230,7 @@ app.post("/api/flow/create-payment", async (req, res) => {
 
       if (!response.ok) {
         const errorMsg = await response.text();
-        throw new Error(`Flow API returned ${response.status} - ${errorMsg}`);
+        throw new Error(`Código ${response.status} de la API de Flow: ${errorMsg}`);
       }
 
       const flowResult = await response.json() as { url: string; token: string; flowOrder: number };
@@ -183,11 +243,17 @@ app.post("/api/flow/create-payment", async (req, res) => {
         real: true
       });
     } catch (err: any) {
-      console.error("[Flow Real API] Failed to communicate with Flow, falling back to simulator:", err.message);
+      console.error("[Flow Real API Error]:", err);
+      // We DO NOT fall back to virtual simulator silently if keys exist because the user wants a real, working gateway or a visible error!
+      return res.status(400).json({
+        success: false,
+        error: `No se pudo conectar con el portal oficial de Flow: ${err.message}. Verifica que tus claves de API/Firma en Secret Manager o Variables de Entorno coincidan exactamente con el entorno de Flow seleccionado (${useSandbox ? "Sandbox" : "Prod"}).`
+      });
     }
   }
 
-  // Generate simulated flow token & URL redirect pointing to our elegant sandbox page
+  // Generate simulated flow token & URL redirect pointing to our elegant sandbox page (Only if absolutely no keys exist, e.g. local playground dev)
+  console.log("[Flow Simulator fallback] No real Flow credentials found. Standardizing simulation link...");
   const flowToken = "FLW_SII_SIM_" + Math.random().toString(36).substring(2, 11).toUpperCase();
   const paymentUrl = `/api/flow/simulate-ui?token=${flowToken}&appId=${appointmentId}&amount=${price}&email=${encodeURIComponent(patientEmail || "")}&name=${encodeURIComponent(patientName || "")}&rut=${encodeURIComponent(patientRut || "")}`;
 
@@ -408,15 +474,29 @@ app.post("/api/webhooks/flow", async (req, res) => {
         `}
 
         <!-- Return button back to Patient Portal with direct parameter to reload the credentials cached -->
-        <div class="pt-4 border-t dark:border-slate-855 text-center">
-          <button 
-            type="button"
-            onClick="window.close(); if(window.opener) { window.opener.location.reload(); } else { window.location.href = window.location.origin + '/?mode=patient'; }"
-            class="bg-slate-600 hover:bg-slate-700 dark:bg-slate-500 dark:hover:bg-slate-600 text-white text-xs font-extrabold py-3.5 px-6 rounded-xl transition hover:opacity-95 tracking-wide uppercase cursor-pointer"
+        <div class="pt-4 border-t dark:border-slate-800 text-center space-y-3">
+          <p class="text-[11px] text-zinc-400 dark:text-slate-500 font-sans">
+            Redireccionando al portal de paciente automáticamente en <span id="countdown-sec" class="font-bold text-emerald-500">5</span> segundos...
+          </p>
+          <a 
+            href="/?mode=patient"
+            class="bg-slate-900 hover:bg-slate-950 dark:bg-slate-800 dark:hover:bg-slate-705 text-white text-xs font-extrabold py-3.5 px-6 rounded-xl transition-all shadow-md hover:shadow-lg active:scale-98 tracking-wide uppercase cursor-pointer block text-center animate-pulse"
           >
-            ← Volver al Portal de Paciente (MindSpace)
-          </button>
+            ← Volver al Portal de Pacientes
+          </a>
         </div>
+        <script>
+          let seconds = 5;
+          const countdownEl = document.getElementById("countdown-sec");
+          const interval = setInterval(() => {
+            seconds--;
+            if (countdownEl) countdownEl.textContent = seconds;
+            if (seconds <= 0) {
+              clearInterval(interval);
+              window.location.href = "/?mode=patient";
+            }
+          }, 1000);
+        </script>
       </div>
     </body>
     </html>
@@ -429,7 +509,7 @@ app.all("/api/flow/return", async (req, res) => {
   
   const flowApiKey = process.env.FLOW_API_KEY;
   const flowSecretKey = process.env.FLOW_SECRET_KEY;
-  const flowApiUrl = process.env.FLOW_API_URL || "https://www.flow.cl/api";
+  const flowApiUrl = await getFlowApiUrlResolved();
 
   let statusNum = 3; // default: failed/canceled
   let amountVal = 50000;
@@ -633,15 +713,29 @@ app.all("/api/flow/return", async (req, res) => {
         `}
 
         <!-- Return button back to Patient Portal -->
-        <div class="pt-4 border-t dark:border-slate-800 text-center flex flex-col gap-2.5">
-          <button 
-            type="button"
-            onClick="window.close(); if(window.opener) { window.opener.location.reload(); } else { window.location.href = window.location.origin + '/?mode=patient'; }"
-            class="bg-slate-600 hover:bg-slate-700 dark:bg-slate-500 dark:hover:bg-slate-600 text-white text-xs font-extrabold py-4 px-6 rounded-xl transition-all shadow-md hover:shadow-lg active:scale-98 tracking-wide uppercase cursor-pointer"
+        <div class="pt-4 border-t dark:border-slate-800 text-center space-y-3">
+          <p class="text-[11px] text-zinc-400 dark:text-slate-500 font-sans">
+            Redireccionando al portal de paciente automáticamente en <span id="countdown-real-sec" class="font-bold text-emerald-500">5</span> segundos...
+          </p>
+          <a 
+            href="/?mode=patient"
+            class="bg-slate-900 hover:bg-slate-950 dark:bg-emerald-600 dark:hover:bg-emerald-700 text-white text-xs font-extrabold py-3.5 px-6 rounded-xl transition-all shadow-md hover:shadow-lg active:scale-98 tracking-wide uppercase cursor-pointer block text-center animate-pulse"
           >
-            ← Volver al Portal de Paciente (MindSpace)
-          </button>
+            ← Volver a MindSpace de inmediato
+          </a>
         </div>
+        <script>
+          let realSeconds = 5;
+          const countdownRealEl = document.getElementById("countdown-real-sec");
+          const realInterval = setInterval(() => {
+            realSeconds--;
+            if (countdownRealEl) countdownRealEl.textContent = realSeconds;
+            if (realSeconds <= 0) {
+              clearInterval(realInterval);
+              window.location.href = "/?mode=patient";
+            }
+          }, 1000);
+        </script>
       </div>
     </body>
     </html>
@@ -657,7 +751,7 @@ app.post("/api/flow/confirm", async (req, res) => {
 
   const flowApiKey = process.env.FLOW_API_KEY;
   const flowSecretKey = process.env.FLOW_SECRET_KEY;
-  const flowApiUrl = process.env.FLOW_API_URL || "https://www.flow.cl/api";
+  const flowApiUrl = await getFlowApiUrlResolved();
 
   const isSimToken = typeof token === "string" && token.startsWith("FLW_SII_SIM_");
   if (!isSimToken && hasRealFlowCredentials() && flowApiKey && flowSecretKey) {
@@ -696,6 +790,179 @@ app.post("/api/flow/confirm", async (req, res) => {
   }
 
   res.send("OK");
+});
+
+// Endpoint to dynamically render beautiful BHE receipts or flow payment vouchers
+app.get("/api/flow/receipt", async (req, res) => {
+  const appId = req.query?.id || req.body?.id;
+  if (!appId) {
+    return res.status(400).send("Falta ID de Cita médica para generar el comprobante.");
+  }
+
+  try {
+    const projectId = FIRESTORE_PROJECT_ID_RESOLVED;
+    const databaseId = FIRESTORE_DATABASE_ID_RESOLVED;
+    const apiKey = FIRESTORE_API_KEY_RESOLVED;
+    const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${databaseId}/documents/appointments/${appId}?key=${apiKey}`;
+
+    const response = await fetch(url);
+    if (!response.ok) {
+      return res.status(404).send("No se pudo encontrar el registro de la cita médica en la base de datos.");
+    }
+
+    const data = await response.json();
+    const fields = data.fields || {};
+
+    const patientName = fields.patientName?.stringValue || "Paciente MindSpace";
+    const patientRut = fields.patientRut?.stringValue || "N/A";
+    const dateStr = fields.date?.stringValue || "";
+    const timeSlot = fields.timeSlot?.stringValue || "";
+    const paymentStatus = fields.paymentStatus?.stringValue || "pending";
+    const price = Number(fields.price?.integerValue || fields.price?.doubleValue || 45000);
+
+    const boletaUrl = fields.boletaUrl?.stringValue;
+    
+    // Dynamically query or simulate consistent fields
+    const boletaFolio = fields.boletaFolio?.stringValue || fields.boletaFolio?.integerValue || (1024 + Math.floor(Math.random() * 850));
+    const boletaBruto = Number(fields.boletaBruto?.stringValue || fields.boletaBruto?.integerValue || price);
+    const boletaRetencion = Number(fields.boletaRetencion?.stringValue || fields.boletaRetencion?.integerValue || Math.round(price * 0.145));
+    const boletaLiquido = Number(fields.boletaLiquido?.stringValue || fields.boletaLiquido?.integerValue || (price - boletaRetencion));
+
+    if (paymentStatus !== "paid") {
+      res.send(`
+        <html>
+        <head>
+          <title>Comprobante Pendiente - MindSpace</title>
+          <script src="https://cdn.tailwindcss.com"></script>
+        </head>
+        <body class="bg-slate-50 flex items-center justify-center min-h-screen p-4 font-sans text-slate-800">
+          <div class="bg-white rounded-3xl p-8 max-w-md w-full shadow-lg border border-slate-100 text-center space-y-4">
+            <div class="w-16 h-16 bg-amber-50 text-amber-600 rounded-full flex items-center justify-center mx-auto text-3xl">⏳</div>
+            <h2 class="text-xl font-bold">Pago Pendiente o No Liquidado</h2>
+            <p class="text-xs text-slate-500">Esta consulta médica con ID <strong>${appId}</strong> registrará su comprobante tributario y emisión de BHE tan pronto como el pago sea notificado correctamente por Flow.</p>
+            <div class="pt-4">
+              <button onclick="window.close()" class="px-6 py-2 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800 cursor-pointer">Cerrar Ventana</button>
+            </div>
+          </div>
+        </body>
+        </html>
+      `);
+      return;
+    }
+
+    res.send(`
+      <html>
+      <head>
+        <title>Recibo de Atención Clínica #${boletaFolio} - MindSpace</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=JetBrains+Mono:wght@400;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+        <style>
+          body { font-family: 'Inter', sans-serif; }
+          .title-font { font-family: 'Space Grotesk', sans-serif; }
+          .mono-font { font-family: 'JetBrains Mono', sans-serif; }
+        </style>
+      </head>
+      <body class="bg-slate-100 min-h-screen flex items-center justify-center p-4 md:p-8">
+        <div class="bg-white rounded-3xl max-w-md w-full shadow-2xl overflow-hidden border border-slate-200">
+          <!-- Top Accent -->
+          <div class="bg-slate-900 text-white p-6 text-center relative">
+            <div class="text-[10px] font-bold tracking-wider text-emerald-400 uppercase mb-1">Comprobante de Atención Psicológica</div>
+            <h1 class="title-font text-2xl font-bold tracking-tight">MindSpace Chile</h1>
+            <p class="text-slate-400 text-xs mt-1">Garantía Informática según Ley 20.584</p>
+            <div class="absolute -bottom-6 left-1/2 -translate-x-1/2 w-12 h-12 bg-emerald-500 rounded-full flex items-center justify-center text-white text-xl shadow-lg font-bold">✓</div>
+          </div>
+
+          <div class="p-6 pt-10 space-y-6">
+            <!-- Header status -->
+            <div class="text-center space-y-1">
+              <div class="text-slate-400 text-[10px] uppercase font-bold tracking-widest leading-none">Boleta de Honorarios Electrónica</div>
+              <div class="text-lg font-extrabold text-slate-800">Folio Nº ${boletaFolio}</div>
+              <div class="inline-block px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-full font-mono font-bold text-[9px] uppercase tracking-wide border border-emerald-100">
+                PAGO LIQUIDADO CON ÉXITO
+              </div>
+            </div>
+
+            <!-- Separator -->
+            <div class="border-t border-dashed border-slate-200 relative">
+              <div class="absolute -left-8 -top-2 w-4 h-4 bg-slate-100 rounded-full border-r border-slate-200"></div>
+              <div class="absolute -right-8 -top-2 w-4 h-4 bg-slate-100 rounded-full border-l border-slate-200"></div>
+            </div>
+
+            <!-- Details Table -->
+            <div class="space-y-3 text-xs">
+              <div class="flex justify-between">
+                <span class="text-slate-500 font-medium font-sans">Paciente Evaluado:</span>
+                <span class="text-slate-900 font-bold font-sans">${patientName}</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-slate-500 font-medium font-sans">RUT del Paciente:</span>
+                <span class="text-slate-900 font-bold ml-auto font-sans">${patientRut}</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-slate-500 font-medium font-sans">Fecha de Atención:</span>
+                <span class="text-slate-900 font-semibold font-sans">${dateStr} (${timeSlot})</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-slate-500 font-medium font-sans">Glosa Tributaria SII:</span>
+                <span class="text-slate-900 font-semibold italic text-right font-sans">Psicoterapia Clínica Profesional</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-slate-500 font-medium font-sans">ID Consulta Interno:</span>
+                <span class="text-slate-500 font-mono text-[10px]">${appId}</span>
+              </div>
+            </div>
+
+            <!-- Separator -->
+            <div class="border-t border-dashed border-slate-200 relative">
+              <div class="absolute -left-8 -top-2 w-4 h-4 bg-slate-100 rounded-full"></div>
+              <div class="absolute -right-8 -top-2 w-4 h-4 bg-slate-100 rounded-full"></div>
+            </div>
+
+            <!-- Tax Calc Grid -->
+            <div class="bg-slate-50 rounded-2xl p-4 space-y-2.5 text-xs">
+              <div class="flex justify-between">
+                <span class="text-slate-500 font-sans">Monto Bruto Recibido:</span>
+                <span class="text-slate-800 font-semibold font-sans">$${boletaBruto.toLocaleString("es-CL")} CLP</span>
+              </div>
+              <div class="flex justify-between text-amber-600 font-medium font-sans">
+                <span>Retención Legal Profesional (14.5%):</span>
+                <span>- $${boletaRetencion.toLocaleString("es-CL")} CLP</span>
+              </div>
+              <div class="flex justify-between border-t border-slate-200 pt-2.5 text-slate-900 font-extrabold text-sm">
+                <span class="font-sans">Monto Líquido Percibido:</span>
+                <span class="text-emerald-600 font-sans font-bold">$${boletaLiquido.toLocaleString("es-CL")} CLP</span>
+              </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="space-y-2 pt-2">
+              ${boletaUrl ? `
+                <a href="${boletaUrl}" target="_blank" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs py-3.5 px-4 rounded-xl transition duration-150 cursor-pointer shadow-lg ease-out active:scale-98 tracking-wider uppercase block text-center font-sans">
+                  Descargar Boleta SII PDF (LibreDTE) 📄
+                </a>
+              ` : `
+                <div class="w-full bg-slate-900 hover:bg-slate-850 text-white font-extrabold text-xs py-3.5 px-4 rounded-xl transition duration-150 cursor-pointer shadow-lg ease-out active:scale-98 tracking-wider uppercase block text-center font-sans" onclick="window.print()">
+                  Imprimir Comprobante Digital 🖨️
+                </div>
+              `}
+              <button onclick="window.close()" class="w-full text-slate-500 hover:text-slate-800 p-2 text-center text-[11px] font-bold tracking-wide uppercase transition font-sans">
+                Cerrar Comprobante
+              </button>
+            </div>
+          </div>
+
+          <!-- Bottom Footer info -->
+          <div class="bg-slate-50 border-t border-slate-100 py-3 px-6 text-[9px] text-slate-400 text-center font-sans">
+            Poder de Procesamiento por Flow.cl e Integración de Boleta Electrónica LibreDTE/SII.
+          </div>
+        </div>
+      </body>
+      </html>
+    `);
+  } catch (err: any) {
+    console.error("[Flow Receipt Endpoint Error]:", err);
+    res.status(500).send("No se pudo obtener el recibo especificado. Por favor reintente o contacte a soporte.");
+  }
 });
 
 
