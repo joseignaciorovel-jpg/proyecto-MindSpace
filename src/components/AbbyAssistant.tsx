@@ -687,12 +687,12 @@ export default function AbbyAssistant({ mode, therapistUid, therapistName, setti
         <div id="abby-discrete-alexa-trigger" className="fixed right-0 top-[35%] -translate-y-1/2 z-40 font-sans select-none pointer-events-auto">
           <div 
             onClick={() => setIsSlideDrawerOpen(!isSlideDrawerOpen)}
-            className={`relative group w-3 hover:w-6 h-36 border shadow-2xl transition-all duration-300 flex flex-col justify-center items-center py-3 select-none cursor-pointer rounded-l-3xl ${
+            className={`relative group w-3 hover:w-6 h-36 border shadow-lg transition-all duration-300 flex flex-col justify-center items-center py-3 select-none cursor-pointer rounded-l-3xl ${
               isListening 
                 ? "bg-gradient-to-b from-orange-400 via-amber-500 to-red-500 border-orange-500 animate-[pulse_1.2s_infinite] shadow-[0_0_20px_rgba(249,115,22,0.95)] scale-102"
                 : isSpeaking
                   ? "bg-gradient-to-b from-amber-400 via-orange-400 to-amber-600 border-amber-400 animate-[bounce_1s_infinite] shadow-[0_0_25px_rgba(245,158,11,1)] scale-110"
-                  : "bg-slate-950 dark:bg-slate-900 border-slate-800 dark:border-slate-800 hover:border-emerald-500 shadow-[0_4px_15px_rgba(0,0,0,0.4)]"
+                  : "bg-white/95 dark:bg-slate-900/95 border-slate-200 dark:border-slate-800 hover:border-emerald-500 dark:hover:border-emerald-500 shadow-[0_4px_12px_rgba(0,0,0,0.08)] dark:shadow-[0_4px_15px_rgba(0,0,0,0.4)]"
             }`}
             title="Tocar (o Alt+A) para hablar con asistente virtual Abby"
           >
@@ -702,7 +702,7 @@ export default function AbbyAssistant({ mode, therapistUid, therapistName, setti
                 ? "bg-white shadow-[0_0_10px_#fff]"
                 : isSpeaking
                   ? "bg-white shadow-[0_0_12px_#fff] animate-pulse"
-                  : "bg-emerald-500/80 group-hover:bg-emerald-400 shadow-[0_0_6px_#10b981]"
+                  : "bg-emerald-500 dark:bg-emerald-400 shadow-[0_0_4px_#34d399]"
             }`} />
 
             {/* Stretched ring visual flare overlay pop */}
