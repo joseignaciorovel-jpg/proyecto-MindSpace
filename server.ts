@@ -92,25 +92,6 @@ async function updateAppointmentStatusPaid(appId: string, amount: number) {
 }
 
 function hasRealFlowCredentials(): boolean {
-  const flowApiKey = (process.env.FLOW_API_KEY || "").trim();
-  const flowSecretKey = (process.env.FLOW_SECRET_KEY || "").trim();
-  if (!flowApiKey || !flowSecretKey) return false;
-  
-  const apiKeyLower = flowApiKey.toLowerCase();
-  const secretKeyLower = flowSecretKey.toLowerCase();
-  
-  if (
-    apiKeyLower === "" || 
-    apiKeyLower === "your_flow_api_key" || 
-    apiKeyLower.includes("dummy") || 
-    apiKeyLower.includes("placeholder") ||
-    secretKeyLower === "" || 
-    secretKeyLower === "your_flow_secret_key" || 
-    secretKeyLower.includes("dummy") || 
-    secretKeyLower.includes("placeholder")
-  ) {
-    return false;
-  }
   return true;
 }
 
@@ -1085,12 +1066,13 @@ Notas de progreso escritas por el terapeuta:
 Observaciones adicionales / diagnósticos temporales:
 "${observations || "Ninguna"}"
 
-Por favor, como asistente de psicología clínica experto bajo secreto médico, proporciona un resumen estructurado de evolución de la sesión. 
-El formato de retorno debe ser Markdown limpio con las siguientes secciones:
-1. **Puntos Clave y Temas Centrales**: Resumen ejecutivo del discurso del paciente.
-2. **Estado Psicoemocional**: Análisis conductual y emocional observado.
-3. **Planes de Acción y Tarea Terapéutica**: Directrices para las siguientes sesiones.
-No agregues juicios personales externos, mantén un tono profesional, empático y estrictamente clínico.`;
+Por favor, como asistente de psicología clínica experto bajo secreto médico, proporciona un resumen estructurado, equilibrado y completo (alrededor de 300 o hasta 500 palabras) de la evolución de la sesión. 
+El formato de retorno debe ser Markdown limpio con suficiente detalle clínico, estructurado en las siguientes secciones:
+1. **Puntos Clave y Temas Centrales**: Resumen explicativo detallado de los principales temas abordados por el paciente durante la sesión.
+2. **Estado Psicoemocional**: Análisis del estado cognitivo, emocional, conductual y actitud observada del paciente.
+3. **Planes de Acción y Tarea Terapéutica**: Indicaciones claras, directrices y actividades terapéuticas asignadas para la próxima sesión y período intersesión.
+
+Evita rodeos innecesarios o saludos introductorios, pero mantén la precisión diagnóstica y el vocabulario clínicamente exhaustivo que le sirva de registro formal de alta calidad al terapeuta.`;
 
     const response = await ai.models.generateContent({
       model: "gemini-3.5-flash",
