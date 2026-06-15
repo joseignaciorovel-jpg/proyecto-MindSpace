@@ -875,14 +875,28 @@ ${therapistName || "Psicólogo/a Tratante"}`;
     setLoadingRecords(true);
     const q = query(
       collection(db, "histories"),
-      where("patientId", "==", selectedPatient.id),
       where("ownerId", "==", therapistUid)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
+      const matchRut = (selectedPatient.rut || "").trim().replace(/\./g, "").replace(/\-/g, "").toLowerCase();
+      const matchEmail = (selectedPatient.email || "").trim().toLowerCase();
+      const matchId = selectedPatient.id;
+
       const records: HistoryRecord[] = [];
       snapshot.forEach((docSnap) => {
-        records.push({ id: docSnap.id, ...docSnap.data() } as HistoryRecord);
+        const data = docSnap.data() as any;
+        const pId = data.patientId || "";
+        const pIdNorm = pId.trim().toLowerCase();
+        
+        // Match if patientId is the actual ID, or matches their email, or matches their RUT!
+        const matchesPat = pId === matchId || 
+                           (matchEmail && pIdNorm === matchEmail) || 
+                           (matchRut && pIdNorm.replace(/\./g, "").replace(/\-/g, "") === matchRut);
+                           
+        if (matchesPat) {
+          records.push({ id: docSnap.id, ...data } as HistoryRecord);
+        }
       });
       // Sort client side by date descending
       records.sort((a, b) => b.date.localeCompare(a.date));

@@ -845,14 +845,19 @@ export default function SecureCallRoom({
     }
   }, [isClinician]);
 
-  // Auto-select patient passed from Agenda
+  // Auto-select patient passed from Agenda and resolve to pat_... if it's an email/rut
   useEffect(() => {
     if (patientId) {
-      setSelectedPatientId(patientId);
+      const resolvedId = patients.find(p => 
+        p.id === patientId || 
+        (p.email && p.email.trim().toLowerCase() === patientId.trim().toLowerCase()) || 
+        (p.rut && p.rut.trim().replace(/\./g, "").replace(/\-/g, "").toLowerCase() === patientId.trim().replace(/\./g, "").replace(/\-/g, "").toLowerCase())
+      )?.id || patientId;
+      setSelectedPatientId(resolvedId);
     } else if (patients.length > 0 && !selectedPatientId) {
       setSelectedPatientId(patients[0].id);
     }
-  }, [patientId, patients]);
+  }, [patientId, patients, selectedPatientId]);
 
   // Loading draft or signed record on patient select change and appointmentId
   useEffect(() => {

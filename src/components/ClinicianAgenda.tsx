@@ -976,7 +976,18 @@ export default function ClinicianAgenda({ therapistUid, onJoinCall }: ClinicianA
         console.error("Failed to automatically confirm attendance:", e);
       }
     }
-    onJoinCall(appt.videoRoomId, { id: appt.patientId || appt.patientEmail, name: appt.patientName, appointmentId: appt.id });
+    const finalPatientId = (() => {
+      if (appt.patientId && appt.patientId.startsWith("pat_")) {
+        return appt.patientId;
+      }
+      const match = patients.find(p => 
+        (appt.patientId && p.id === appt.patientId) || 
+        (appt.patientEmail && p.email?.trim().toLowerCase() === appt.patientEmail?.trim().toLowerCase()) || 
+        (appt.patientRut && p.rut?.trim().replace(/\./g, "").replace(/\-/g, "").toLowerCase() === appt.patientRut?.trim().replace(/\./g, "").replace(/\-/g, "").toLowerCase())
+      );
+      return match ? match.id : (appt.patientId || appt.patientEmail);
+    })();
+    onJoinCall(appt.videoRoomId, { id: finalPatientId, name: appt.patientName, appointmentId: appt.id });
   };
 
   // Action: Create manual appointment
@@ -1099,7 +1110,20 @@ export default function ClinicianAgenda({ therapistUid, onJoinCall }: ClinicianA
                   </div>
                   <button
                     type="button"
-                    onClick={() => onJoinCall(appt.videoRoomId, { id: appt.patientId || appt.patientEmail, name: appt.patientName, appointmentId: appt.id })}
+                    onClick={() => {
+                      const finalPatientId = (() => {
+                        if (appt.patientId && appt.patientId.startsWith("pat_")) {
+                          return appt.patientId;
+                        }
+                        const match = patients.find(p => 
+                          (appt.patientId && p.id === appt.patientId) || 
+                          (appt.patientEmail && p.email?.trim().toLowerCase() === appt.patientEmail?.trim().toLowerCase()) || 
+                          (appt.patientRut && p.rut?.trim().replace(/\./g, "").replace(/\-/g, "").toLowerCase() === appt.patientRut?.trim().replace(/\./g, "").replace(/\-/g, "").toLowerCase())
+                        );
+                        return match ? match.id : (appt.patientId || appt.patientEmail);
+                      })();
+                      onJoinCall(appt.videoRoomId, { id: finalPatientId, name: appt.patientName, appointmentId: appt.id });
+                    }}
                     className="py-1.5 px-3 bg-red-650 hover:bg-red-705 text-white font-extrabold rounded-xl text-[11px] uppercase flex items-center gap-1 cursor-pointer shadow hover:scale-[1.01] active:scale-99 transition-all"
                   >
                     <Video className="w-3.5 h-3.5 text-white" /> Atender Urgencia Ahora
