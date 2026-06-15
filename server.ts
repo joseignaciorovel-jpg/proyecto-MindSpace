@@ -102,12 +102,10 @@ function hasRealFlowCredentials(): boolean {
   if (
     apiKeyLower === "" || 
     apiKeyLower === "your_flow_api_key" || 
-    apiKeyLower === "your_flow_secret_key" || 
     apiKeyLower.includes("dummy") || 
     apiKeyLower.includes("placeholder") ||
     secretKeyLower === "" || 
     secretKeyLower === "your_flow_secret_key" || 
-    secretKeyLower === "your_flow_api_key" || 
     secretKeyLower.includes("dummy") || 
     secretKeyLower.includes("placeholder")
   ) {
@@ -172,97 +170,121 @@ app.post("/api/flow/create-payment", async (req, res) => {
   const flowApiUrl = await getFlowApiUrlResolved(useSandbox);
   const numAmount = Number(price);
 
-  console.log(`[Flow Diagnostic] Checking keys configuration... API Key is set: ${!!flowApiKey} (${flowApiKey.length} chars), Secret Key is set: ${!!flowSecretKey} (${flowSecretKey.length} chars). Mode is ${useSandbox ? "SANDBOX" : "PRODUCTION"}. URL: ${flowApiUrl}`);
+  const isApiKeyPlaceholder = !flowApiKey || flowApiKey.toLowerCase() === "your_flow_api_key" || flowApiKey.toLowerCase().includes("placeholder") || flowApiKey.toLowerCase().includes("dummy");
+  const isSecretKeyPlaceholder = !flowSecretKey || flowSecretKey.toLowerCase() === "your_flow_secret_key" || flowSecretKey.toLowerCase().includes("placeholder") || flowSecretKey.toLowerCase().includes("dummy");
 
-  if (hasRealFlowCredentials()) {
-    try {
-      console.log(`[Flow Real API] Initiating transaction with Flow API keys in ${useSandbox ? "Sandbox" : "Production"} mode...`);
-      
-      let devOrigin = origin;
-      if (!devOrigin && req.headers.referer) {
-        try {
-          const u = new URL(req.headers.referer);
-          devOrigin = u.origin;
-        } catch (_) {}
-      }
-      if (!devOrigin) {
-        const host = req.get('host') || req.headers.host;
-        if (host) {
-          const proto = req.headers['x-forwarded-proto'] || (host.includes('localhost') ? 'http' : 'https');
-          devOrigin = `${proto}://${host}`;
-        }
-      }
-      const baseUrl = devOrigin || process.env.APP_URL || "http://localhost:3000";
-      
-      const payload: Record<string, any> = {
-        apiKey: flowApiKey,
-        amount: numAmount,
-        commerceOrder: appointmentId,
-        email: patientEmail || "correo@paciente.cl",
-        subject: "Atención Psicoterapéutica Clínica - MindSpace",
-        urlConfirmation: `${baseUrl}/api/flow/confirm`,
-        urlReturn: `${baseUrl}/api/flow/return`,
-      };
+  const hostHeader = req.get('host') || req.headers.host || "";
+  const isDevLocal = hostHeader.includes("localhost") || hostHeader.includes("127.0.0.1") || hostHeader.includes("ais-dev-") || hostHeader.includes("ais-pre-");
 
-      // 1. Sort fields alphabetically
-      const sortedKeys = Object.keys(payload).sort();
-      // 2. Concatenate as key=value&key2=value2...
-      const stringToSign = sortedKeys.map(k => `${k}=${payload[k]}`).join("&");
-      // 3. Generate HMAC-SHA256 signature s
-      const signature = crypto.createHmac("sha256", flowSecretKey).update(stringToSign).digest("hex");
-      
-      payload.s = signature;
+  console.log("=================== [Flow Payment Verbose Diagnostic] ===================");
+  console.log(`- Request Host Header: "${hostHeader}"`);
+  console.log(`- Detected isDevLocal: ${isDevLocal}`);
+  console.log(`- Client body 'useSandbox': ${useSandbox}`);
+  console.log(`- FLOW_API_KEY exists: ${!!flowApiKey} (Length: ${flowApiKey.length})`);
+  console.log(`- FLOW_SECRET_KEY exists: ${!!flowSecretKey} (Length: ${flowSecretKey.length})`);
+  console.log(`- FLOW_API_KEY value preview: "${flowApiKey ? `${flowApiKey.substring(0, Math.min(3, flowApiKey.length))}...${flowApiKey.substring(Math.max(0, flowApiKey.length - 2))}` : "EMPTY"}"`);
+  console.log(`- FLOW_SECRET_KEY value preview: "${flowSecretKey ? `${flowSecretKey.substring(0, Math.min(3, flowSecretKey.length))}...${flowSecretKey.substring(Math.max(0, flowSecretKey.length - 2))}` : "EMPTY"}"`);
+  console.log(`- isApiKeyPlaceholder: ${isApiKeyPlaceholder}`);
+  console.log(`- isSecretKeyPlaceholder: ${isSecretKeyPlaceholder}`);
+  console.log(`- hasRealFlowCredentials(): ${hasRealFlowCredentials()}`);
+  console.log(`- Target Flow URL: "${flowApiUrl}/payment/create"`);
+  console.log("========================================================================");
 
-      // 4. Construct form urlencoded search query strings
-      const searchParams = new URLSearchParams();
-      for (const [key, val] of Object.entries(payload)) {
-        searchParams.append(key, String(val));
-      }
+  if (!hasRealFlowCredentials()) {
+    return res.status(400).json({
+      success: false,
+      error: `Las credenciales de la API de Flow no están configuradas correctamente en tu servidor de Cloud Run.
 
-      console.log(`[Flow Real API] Requesting payment creation link: ${flowApiUrl}/payment/create`);
-      const response = await fetch(`${flowApiUrl}/payment/create`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded"
-        },
-        body: searchParams.toString()
-      });
+DIAGNÓSTICO EN TIEMPO DE EJECUCIÓN (Lo que lee el backend en este momento):
+• FLOW_API_KEY: ${flowApiKey ? `Cargado (Largo: ${flowApiKey.length} caracteres, valor cargado: "${flowApiKey.substring(0, Math.min(3, flowApiKey.length))}...${flowApiKey.substring(Math.max(0, flowApiKey.length - 2))}")` : "FALTANTE / NO CONFIGURADO (Vacío)"}
+• FLOW_SECRET_KEY: ${flowSecretKey ? `Cargado (Largo: ${flowSecretKey.length} caracteres)` : "FALTANTE / NO CONFIGURADO (Vacío)"}
+• ¿Es el marcador de posición predeterminado?: ${isApiKeyPlaceholder ? "SÍ (Tiene las claves de ejemplo de .env.example)" : "NO"}
+• Servidor Host: "${hostHeader}"
+• Modo Solicitado por el Cliente: "${useSandbox ? "Sandbox" : "Producción"}"
 
-      if (!response.ok) {
-        const errorMsg = await response.text();
-        throw new Error(`Código ${response.status} de la API de Flow: ${errorMsg}`);
-      }
-
-      const flowResult = await response.json() as { url: string; token: string; flowOrder: number };
-      console.log("[Flow Real API] Payment link created successfully:", flowResult);
-
-      return res.json({
-        success: true,
-        token: flowResult.token,
-        paymentUrl: `${flowResult.url}?token=${flowResult.token}`,
-        real: true
-      });
-    } catch (err: any) {
-      console.error("[Flow Real API Error]:", err);
-      // We DO NOT fall back to virtual simulator silently if keys exist because the user wants a real, working gateway or a visible error!
-      return res.status(400).json({
-        success: false,
-        error: `No se pudo conectar con el portal oficial de Flow: ${err.message}. Verifica que tus claves de API/Firma en Secret Manager o Variables de Entorno coincidan exactamente con el entorno de Flow seleccionado (${useSandbox ? "Sandbox" : "Prod"}).`
-      });
-    }
+Para solucionar este inconveniente y que la pasarela redirija de verdad:
+1. Dirígete a la Consola de Google Cloud Run.
+2. Selecciona tu servicio activo "proyecto-mindspace-...".
+3. Presiona el botón "Editar y desplegar nueva revisión" (Edit & Deploy New Revision).
+4. Ve a la pestaña "Variables y Secretos" (Variables & Secrets).
+5. Asegúrate de configurar las variables "FLOW_API_KEY" y "FLOW_SECRET_KEY" asociándolas correspondientemente a tus secretos reales con la etiqueta "latest" seleccionada. ¡No olvides guardar los cambios y desplegar para que el contenedor adquiera sus nuevos parámetros!`
+    });
   }
 
-  // Generate simulated flow token & URL redirect pointing to our elegant sandbox page (Only if absolutely no keys exist, e.g. local playground dev)
-  console.log("[Flow Simulator fallback] No real Flow credentials found. Standardizing simulation link...");
-  const flowToken = "FLW_SII_SIM_" + Math.random().toString(36).substring(2, 11).toUpperCase();
-  const paymentUrl = `/api/flow/simulate-ui?token=${flowToken}&appId=${appointmentId}&amount=${price}&email=${encodeURIComponent(patientEmail || "")}&name=${encodeURIComponent(patientName || "")}&rut=${encodeURIComponent(patientRut || "")}`;
+  try {
+    console.log(`[Flow Real API] Initiating transaction with Flow API keys in ${useSandbox ? "Sandbox" : "Production"} mode...`);
+    
+    let devOrigin = origin;
+    if (!devOrigin && req.headers.referer) {
+      try {
+        const u = new URL(req.headers.referer);
+        devOrigin = u.origin;
+      } catch (_) {}
+    }
+    if (!devOrigin) {
+      const host = req.get('host') || req.headers.host;
+      if (host) {
+        const proto = req.headers['x-forwarded-proto'] || (host.includes('localhost') ? 'http' : 'https');
+        devOrigin = `${proto}://${host}`;
+      }
+    }
+    const baseUrl = devOrigin || process.env.APP_URL || "http://localhost:3000";
+    
+    const payload: Record<string, any> = {
+      apiKey: flowApiKey,
+      amount: numAmount,
+      commerceOrder: appointmentId,
+      email: patientEmail || "correo@paciente.cl",
+      subject: "Atención Psicoterapéutica Clínica - MindSpace",
+      urlConfirmation: `${baseUrl}/api/flow/confirm`,
+      urlReturn: `${baseUrl}/api/flow/return`,
+    };
 
-  res.json({
-    success: true,
-    token: flowToken,
-    paymentUrl,
-    real: false
-  });
+    // 1. Sort fields alphabetically
+    const sortedKeys = Object.keys(payload).sort();
+    // 2. Concatenate as key=value&key2=value2...
+    const stringToSign = sortedKeys.map(k => `${k}=${payload[k]}`).join("&");
+    // 3. Generate HMAC-SHA256 signature s
+    const signature = crypto.createHmac("sha256", flowSecretKey).update(stringToSign).digest("hex");
+    
+    payload.s = signature;
+
+    // 4. Construct form urlencoded search query strings
+    const searchParams = new URLSearchParams();
+    for (const [key, val] of Object.entries(payload)) {
+      searchParams.append(key, String(val));
+    }
+
+    console.log(`[Flow Real API] Requesting payment creation link: ${flowApiUrl}/payment/create`);
+    const response = await fetch(`${flowApiUrl}/payment/create`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded"
+      },
+      body: searchParams.toString()
+    });
+
+    if (!response.ok) {
+      const errorMsg = await response.text();
+      throw new Error(`Código ${response.status} de la API de Flow: ${errorMsg}`);
+    }
+
+    const flowResult = await response.json() as { url: string; token: string; flowOrder: number };
+    console.log("[Flow Real API] Payment link created successfully:", flowResult);
+
+    return res.json({
+      success: true,
+      token: flowResult.token,
+      paymentUrl: `${flowResult.url}?token=${flowResult.token}`,
+      real: true
+    });
+  } catch (err: any) {
+    console.error("[Flow Real API Error]:", err);
+    return res.status(400).json({
+      success: false,
+      error: `No se pudo conectar con el portal oficial de Flow debido al siguiente error: ${err.message}. Verifica que tus claves de API/Firma en las Variables de Entorno del servidor coincidan exactamente con el entorno de Flow seleccionado (${useSandbox ? "Sandbox" : "Prod"}).`
+    });
+  }
 });
 
 // A lovely mock UI representing the Webpay/Flow payment gateway interface
