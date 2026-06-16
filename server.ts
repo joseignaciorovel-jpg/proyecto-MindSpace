@@ -9,6 +9,15 @@ import { GoogleGenAI } from "@google/genai";
 // Load environment variables
 dotenv.config();
 
+// === DIAGNÓSTICO DE ARRANQUE PARA VARIABLES DE ENTORNO FLOW ===
+const _diagFlowKey = (process.env.FLOW_API_KEY || "").trim();
+const _diagFlowSecret = (process.env.FLOW_SECRET_KEY || "").trim();
+console.log("=== DIAGNÓSTICO DE VARIABLES DE ENTORNO AL ARRANQUE ===");
+console.log(`FLOW_API_KEY: largo=${_diagFlowKey.length}, vacío=${_diagFlowKey.length === 0}, primeros4="${_diagFlowKey.substring(0, Math.min(4, _diagFlowKey.length))}"`);
+console.log(`FLOW_SECRET_KEY: largo=${_diagFlowSecret.length}, vacío=${_diagFlowSecret.length === 0}`);
+console.log(`NODE_ENV: ${process.env.NODE_ENV}`);
+console.log("=======================================================");
+
 // Load local Firebase Applet configuration fallback dynamically to keep hardcoded keys out of the code
 let localFirebaseConfig: any = {};
 try {
@@ -92,6 +101,18 @@ async function updateAppointmentStatusPaid(appId: string, amount: number) {
 }
 
 function hasRealFlowCredentials(): boolean {
+  const apiKey = (process.env.FLOW_API_KEY || "").trim();
+  const secretKey = (process.env.FLOW_SECRET_KEY || "").trim();
+  if (!apiKey || !secretKey) return false;
+  
+  const apiKeyLower = apiKey.toLowerCase();
+  const secretKeyLower = secretKey.toLowerCase();
+  
+  const placeholders = ["", "your_flow_api_key", "your_flow_secret_key", "placeholder", "dummy", "example"];
+  if (apiKeyLower.length < 10 || secretKeyLower.length < 10) return false;
+  if (placeholders.some(p => p !== "" && apiKeyLower.includes(p))) return false;
+  if (placeholders.some(p => p !== "" && secretKeyLower.includes(p))) return false;
+  
   return true;
 }
 
@@ -510,8 +531,8 @@ app.post("/api/webhooks/flow", async (req, res) => {
 app.all("/api/flow/return", async (req, res) => {
   const token = req.body?.token || req.query?.token;
   
-  const flowApiKey = process.env.FLOW_API_KEY;
-  const flowSecretKey = process.env.FLOW_SECRET_KEY;
+  const flowApiKey = (process.env.FLOW_API_KEY || "").trim();
+  const flowSecretKey = (process.env.FLOW_SECRET_KEY || "").trim();
   const flowApiUrl = await getFlowApiUrlResolved();
 
   let statusNum = 3; // default: failed/canceled
@@ -752,8 +773,8 @@ app.post("/api/flow/confirm", async (req, res) => {
     return res.status(400).send("Falta Token.");
   }
 
-  const flowApiKey = process.env.FLOW_API_KEY;
-  const flowSecretKey = process.env.FLOW_SECRET_KEY;
+  const flowApiKey = (process.env.FLOW_API_KEY || "").trim();
+  const flowSecretKey = (process.env.FLOW_SECRET_KEY || "").trim();
   const flowApiUrl = await getFlowApiUrlResolved();
 
   const isSimToken = typeof token === "string" && token.startsWith("FLW_SII_SIM_");
@@ -990,6 +1011,20 @@ function getGeminiClient(): GoogleGenAI {
 }
 
 // REST APIs
+app.get("/api/env-check", (req, res) => {
+  const k = (process.env.FLOW_API_KEY || "").trim();
+  const s = (process.env.FLOW_SECRET_KEY || "").trim();
+  res.json({
+    flow_api_key_largo: k.length,
+    flow_api_key_preview: k.length > 0 ? `${k.substring(0, Math.min(4, k.length))}...${k.substring(Math.max(0, k.length - 3))}` : "VACÍO ❌",
+    flow_secret_key_largo: s.length,
+    flow_secret_key_preview: s.length > 0 ? `${s.substring(0, Math.min(4, s.length))}...${s.substring(Math.max(0, s.length - 3))}` : "VACÍO ❌",
+    has_real_credentials: hasRealFlowCredentials(),
+    flow_api_url: process.env.FLOW_API_URL || "no configurada",
+    node_env: process.env.NODE_ENV,
+  });
+});
+
 app.get("/api/health", (req, res) => {
   res.json({ status: "healthy", timestamp: new Date().toISOString() });
 });

@@ -577,6 +577,7 @@ export default function App() {
                 setActiveCallPatient(null);
               }}
               therapistName={therapistName}
+              therapistUid={therapistUid}
               patientId={activeCallPatient?.id}
               patientName={activeCallPatient?.name}
               appointmentId={activeCallPatient?.appointmentId}

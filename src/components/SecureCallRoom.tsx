@@ -349,6 +349,7 @@ interface SecureCallRoomProps {
   roomId: string;
   onLeaveCall: () => void;
   therapistName?: string;
+  therapistUid?: string;
   patientId?: string;
   patientName?: string;
   appointmentId?: string;
@@ -359,6 +360,7 @@ export default function SecureCallRoom({
   roomId, 
   onLeaveCall, 
   therapistName, 
+  therapistUid,
   patientId, 
   patientName, 
   appointmentId, 
@@ -828,7 +830,7 @@ export default function SecureCallRoom({
   // Fetch patients lists on mount for clinical search dropdown
   useEffect(() => {
     if (isClinician) {
-      const ownerId = auth.currentUser?.uid || "default_psychologist_uid_123";
+      const ownerId = therapistUid || auth.currentUser?.uid || "default_psychologist_uid_123";
       const q = query(
         collection(db, "patients"),
         where("ownerId", "==", ownerId)
@@ -843,7 +845,7 @@ export default function SecureCallRoom({
       });
       return () => unsubscribe();
     }
-  }, [isClinician]);
+  }, [isClinician, therapistUid]);
 
   // Auto-select patient passed from Agenda and resolve to pat_... if it's an email/rut
   useEffect(() => {
@@ -1280,7 +1282,7 @@ ${docName}`;
         observations: `Emisión de documento: ${reportDocTitle}`,
         aiSummary: "Ficha oficial generada e impresa en la ventana de consulta clínica.",
         createdAt: Timestamp.now(),
-        ownerId: "default_psychologist_uid_123"
+        ownerId: therapistUid || "default_psychologist_uid_123"
       };
 
       const { doc, setDoc } = await import("firebase/firestore");
@@ -1363,7 +1365,7 @@ ${docName}`;
         observations: combinedDiagnostics || "Estable",
         aiSummary: aiSummaryResult || "Resumen de evolución clínica no generado en llamada.",
         createdAt: Timestamp.now(),
-        ownerId: "default_psychologist_uid_123",
+        ownerId: therapistUid || "default_psychologist_uid_123",
         isSigned: isSigned,
         ...(isSigned && sigName && sigDoc ? {
           signatureDate: new Date().toLocaleDateString("es-CL"),
