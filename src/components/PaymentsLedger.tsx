@@ -75,14 +75,40 @@ export default function PaymentsLedger({ therapistUid }: PaymentsLedgerProps) {
 
   // Render monthly progression bars (Using pure inline SVGs)
   const renderMonthlyChart = () => {
-    // Basic aggregation
-    const monthlyData = [
-      { name: "Ene", value: totalRevenue * 0.1 },
-      { name: "Feb", value: totalRevenue * 0.2 },
-      { name: "Mar", value: totalRevenue * 0.35 },
-      { name: "Abr", value: totalRevenue * 0.5 },
-      { name: "May", value: totalRevenue }
-    ];
+    // Dynamic 6-month tracking
+    const monthNames = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonthIndex = now.getMonth(); // 0-11
+    
+    // Generate rolling last 6 months dynamically
+    const monthlyData: { name: string; year: number; monthNum: number; value: number }[] = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(currentYear, currentMonthIndex - i, 1);
+      monthlyData.push({
+        name: monthNames[d.getMonth()],
+        year: d.getFullYear(),
+        monthNum: d.getMonth() + 1, // 1-12
+        value: 0
+      });
+    }
+
+    // Populate using actual Firebase appointments
+    appointments.forEach((appt) => {
+      if (appt.paymentStatus === "paid" && appt.status !== "canceled" && appt.date) {
+        const parts = appt.date.split("-");
+        if (parts.length >= 2) {
+          const apptYear = parseInt(parts[0], 10);
+          const apptMonth = parseInt(parts[1], 10); // 1-12
+          
+          // Match matching bucket in our 6-month rolling window
+          const bucket = monthlyData.find((m) => m.year === apptYear && m.monthNum === apptMonth);
+          if (bucket) {
+            bucket.value += appt.price || 0;
+          }
+        }
+      }
+    });
 
     const maxVal = Math.max(...monthlyData.map((d) => d.value), 1000);
 
@@ -91,13 +117,16 @@ export default function PaymentsLedger({ therapistUid }: PaymentsLedgerProps) {
         <h4 className="text-xs font-bold text-slate-700 tracking-wider uppercase mb-4">Progreso Mensual de Ingresos ($)</h4>
         <div className="flex items-end justify-between h-40 gap-4 pt-4">
           {monthlyData.map((d, i) => {
-            const pct = (d.value / maxVal) * 100;
+            const pct = (d.value / maxVal) * 85; 
             return (
               <div key={i} className="flex-1 flex flex-col items-center gap-2 h-full justify-end font-sans">
-                <span className="text-[10px] font-mono font-bold text-slate-800">${Math.round(d.value)}</span>
+                <span className="text-[9px] font-mono font-bold text-slate-800">
+                  ${Math.round(d.value).toLocaleString("es-CL")}
+                </span>
                 <div
                   className="w-full bg-slate-900 rounded-t-lg transition-all duration-500 ease-out min-h-[4px]"
                   style={{ height: `${Math.max(pct, 4)}%` }}
+                  title={`${d.name} ${d.year}: $${d.value.toLocaleString("es-CL")} CLP`}
                 />
                 <span className="text-[10px] font-semibold text-slate-500">{d.name}</span>
               </div>
