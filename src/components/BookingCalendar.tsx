@@ -466,8 +466,7 @@ export default function BookingCalendar({
           patientEmail: email,
           patientName: name,
           patientRut: rut,
-          origin: window.location.origin,
-          useSandbox: settings?.flowSandboxMode !== false
+          origin: window.location.origin
         })
       });
 
