@@ -50,7 +50,9 @@ ${therapistName || "José Romero Velásquez"}`;
 
   // Update share link and message payload when modal opens or inputs change
   useEffect(() => {
-    const productionOrigin = "https://proyecto-mindspace-597030236952.southamerica-west1.run.app";
+    const productionOrigin = typeof window !== "undefined" && window.location && window.location.origin 
+      ? window.location.origin 
+      : "https://proyecto-mindspace-597030236952.southamerica-west1.run.app";
     const sanitizedTherapistName = encodeURIComponent(therapistName || "Ps. José Ignacio Romero Velásquez");
     const link = `${productionOrigin}/?mode=review&therapistId=default_psychologist_uid_123&therapistName=${sanitizedTherapistName}`;
     setShareUrl(link);

@@ -47,7 +47,9 @@ export default function ClinicalHistoryManager({ therapistUid, therapistName }: 
 
   const handleCopyReviewLink = () => {
     if (!selectedPatient) return;
-    const productionOrigin = "https://proyecto-mindspace-597030236952.southamerica-west1.run.app";
+    const productionOrigin = typeof window !== "undefined" && window.location && window.location.origin 
+      ? window.location.origin 
+      : "https://proyecto-mindspace-597030236952.southamerica-west1.run.app";
     const url = `${productionOrigin}?mode=review&patientId=${selectedPatient.id}&therapistId=${therapistUid}&therapistName=${encodeURIComponent(therapistName || "Dr. José Ignacio Rovel")}&patientName=${encodeURIComponent(selectedPatient.name)}`;
     navigator.clipboard.writeText(url)
       .then(() => {
@@ -62,7 +64,9 @@ export default function ClinicalHistoryManager({ therapistUid, therapistName }: 
 
   const handleCopyPatientPortalLink = () => {
     if (!selectedPatient) return;
-    const productionOrigin = "https://proyecto-mindspace-597030236952.southamerica-west1.run.app";
+    const productionOrigin = typeof window !== "undefined" && window.location && window.location.origin 
+      ? window.location.origin 
+      : "https://proyecto-mindspace-597030236952.southamerica-west1.run.app";
     const cleanRut = (selectedPatient.rut || "").trim();
     const cleanEmail = (selectedPatient.email || "").trim();
     
@@ -88,6 +92,18 @@ export default function ClinicalHistoryManager({ therapistUid, therapistName }: 
       await deleteDoc(doc(db, "reviews", reviewId));
     } catch (error) {
       console.error("Error deleting review:", error);
+    }
+  };
+
+  const handleToggleConsent = async (reviewId: string, currentConsent: boolean) => {
+    try {
+      const reviewRef = doc(db, "reviews", reviewId);
+      await updateDoc(reviewRef, {
+        publicConsent: !currentConsent
+      });
+    } catch (error) {
+      console.error("Error toggling review consent:", error);
+      alert("Hubo un error al cambiar el estado de privacidad.");
     }
   };
 
@@ -3105,13 +3121,23 @@ ${therapistName || "Psicólogo/a Tratante"}`;
                         </p>
                       </div>
 
-                      <div className="flex justify-between items-center pt-2 border-t border-gray-100 mt-2 text-[10px]">
+                      <div className="flex justify-between items-center pt-2 border-t border-gray-100 mt-2 text-[10px] gap-2">
                         <span className="text-gray-400 font-mono">
                           📅 {rev.createdAt?.toDate ? new Date(rev.createdAt.toDate()).toLocaleDateString() : "Reciente"}
                         </span>
-                        <span className={`font-semibold ${rev.publicConsent ? "text-emerald-500 font-bold" : "text-amber-500"}`}>
-                          {rev.publicConsent ? "✓ Publicación Permitida" : "🔒 Privado (Solo Especialista)"}
-                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleToggleConsent(rev.id, rev.publicConsent)}
+                          className={`font-semibold px-2 py-1 rounded-lg border text-[9.5px] cursor-pointer transition-all active:scale-95 flex items-center gap-1 shrink-0 ${
+                            rev.publicConsent 
+                              ? "bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/20 dark:border-emerald-900/40 dark:text-emerald-400" 
+                              : "bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100 dark:bg-amber-950/20 dark:border-amber-900/40 dark:text-amber-400"
+                          }`}
+                          title={rev.publicConsent ? "Cambiar a privado" : "Cambiar a público en la web principal"}
+                        >
+                          {rev.publicConsent ? "✓ Publicación Permitida" : "🔒 Privado (Oculto)"}
+                          <span className="text-[8px] underline opacity-80">(Cambiar)</span>
+                        </button>
                       </div>
                     </div>
                   ))}

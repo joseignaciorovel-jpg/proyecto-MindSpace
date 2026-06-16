@@ -2586,7 +2586,9 @@ ${docName}`;
                             type="button"
                             onClick={() => {
                               // Manual copy link
-                              const productionOrigin = "https://proyecto-mindspace-597030236952.southamerica-west1.run.app";
+                              const productionOrigin = typeof window !== "undefined" && window.location && window.location.origin 
+                                ? window.location.origin 
+                                : "https://proyecto-mindspace-597030236952.southamerica-west1.run.app";
                               const dummyUrl = `${productionOrigin}/evaluacion?therapist=${encodeURIComponent(therapistName || '')}&patient=${encodeURIComponent(patientName || '')}&room=${roomId}`;
                               navigator.clipboard.writeText(dummyUrl);
                               alert(`🔗 ¡Enlace de evaluación copiado al portapapeles!\n\n${dummyUrl}\n\nPuede enviarlo por WhatsApp o correo al paciente para que lo responda de manera externa.`);
