@@ -112,6 +112,17 @@ export default function PatientPortal({ therapistUid, therapistName, sessionPric
   const [crisisProposedAppt, setCrisisProposedAppt] = useState<any | null>(null);
   const [overbookedAppt, setOverbookedAppt] = useState<any | null>(null);
 
+  // Real-time fetched patient profile and self-management states
+  const [currentPatient, setCurrentPatient] = useState<any | null>(null);
+  const [showPortalDemographicsForm, setShowPortalDemographicsForm] = useState(false);
+  const [portalNameInput, setPortalNameInput] = useState("");
+  const [portalRutInput, setPortalRutInput] = useState("");
+  const [portalEmailInput, setPortalEmailInput] = useState("");
+  const [portalPhoneInput, setPortalPhoneInput] = useState("");
+  const [portalConsentCheckbox, setPortalConsentCheckbox] = useState(false);
+  const [isSavingPortalDemographics, setIsSavingPortalDemographics] = useState(false);
+
+
   // Dynamic helper to check if patient has already submitted an entry TODAY
   const hasSubmittedToday = () => {
     if (!moodLogs || moodLogs.length === 0) return false;
@@ -685,6 +696,130 @@ export default function PatientPortal({ therapistUid, therapistName, sessionPric
     autoProvision();
   }, [hasAccess, patientRut, patientEmail, therapistUid, appointments]);
 
+  // Listen to the patient document in real-time
+  useEffect(() => {
+    if (!hasAccess || !patientRut || !patientEmail) {
+      setCurrentPatient(null);
+      return;
+    }
+
+    const normalizedRut = patientRut.trim().replace(/\./g, "").replace(/\-/g, "").toLowerCase();
+    const q = query(
+      collection(db, "patients"),
+      where("rut", "==", normalizedRut)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      if (!snapshot.empty) {
+        const docSnap = snapshot.docs[0];
+        const pData = docSnap.data();
+        setCurrentPatient({ id: docSnap.id, ...pData });
+        
+        // Match state inputs if not currently editing
+        setPortalNameInput(pData.name || "");
+        setPortalRutInput(pData.rut || "");
+        setPortalEmailInput(pData.email || "");
+        setPortalPhoneInput(pData.phone === "No provisto" ? "" : (pData.phone || ""));
+      } else {
+        // Fallback by email matches
+        const qEmail = query(
+          collection(db, "patients"),
+          where("email", "==", patientEmail.trim().toLowerCase())
+        );
+        getDocs(qEmail).then((snapEmail) => {
+          if (!snapEmail.empty) {
+            const d = snapEmail.docs[0];
+            const pData = d.data();
+            setCurrentPatient({ id: d.id, ...pData });
+            setPortalNameInput(pData.name || "");
+            setPortalRutInput(pData.rut || "");
+            setPortalEmailInput(pData.email || "");
+            setPortalPhoneInput(pData.phone === "No provisto" ? "" : (pData.phone || ""));
+          }
+        });
+      }
+    }, (err) => {
+      console.error("Error listening to patient document in portal:", err);
+    });
+
+    return () => unsubscribe();
+  }, [hasAccess, patientRut, patientEmail]);
+
+  const validatePortalRut = (rutStr: string) => {
+    const normalized = rutStr.replace(/\./g, "").replace(/-/g, "").trim();
+    if (normalized.length < 8 || normalized.length > 9) return false;
+    const body = normalized.slice(0, -1);
+    const dv = normalized.slice(-1).toUpperCase();
+    
+    let sum = 0;
+    let mul = 2;
+    for (let i = body.length - 1; i >= 0; i--) {
+      sum += parseInt(body[i], 10) * mul;
+      mul = mul === 7 ? 2 : mul + 1;
+    }
+    const res = 11 - (sum % 11);
+    let expectedDv = "";
+    if (res === 11) expectedDv = "0";
+    else if (res === 10) expectedDv = "K";
+    else expectedDv = String(res);
+    
+    return expectedDv === dv;
+  };
+
+  const handleSavePortalDemographics = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentPatient) {
+      alert("Hubo un error de sincronización de su cuenta. Intente recargar el portal.");
+      return;
+    }
+    if (!portalNameInput.trim() || !portalRutInput.trim() || !portalEmailInput.trim() || !portalPhoneInput.trim()) {
+      alert("Por favor rellene todos los campos (Nombre, RUT, Correo Electrónico y Teléfono).");
+      return;
+    }
+
+    if (!validatePortalRut(portalRutInput)) {
+      alert("El RUT ingresado no es válido. Formato correcto: 12.345.678-k");
+      return;
+    }
+
+    setIsSavingPortalDemographics(true);
+    try {
+      const patientRef = doc(db, "patients", currentPatient.id);
+      const updatedValues = {
+        name: portalNameInput.trim(),
+        rut: portalRutInput.trim().toLowerCase(),
+        email: portalEmailInput.trim().toLowerCase(),
+        phone: portalPhoneInput.trim(),
+        consentLawAccepted: true,
+        consentTimestamp: Timestamp.now()
+      };
+
+      await updateDoc(patientRef, updatedValues);
+      
+      // Update local storage credentials in case email or rut changed
+      localStorage.setItem(
+        "mindspace_patient_credentials",
+        JSON.stringify({
+          rut: portalRutInput.trim().toLowerCase(),
+          email: portalEmailInput.trim().toLowerCase(),
+        })
+      );
+      setPatientRut(portalRutInput.trim().toLowerCase());
+      setPatientEmail(portalEmailInput.trim().toLowerCase());
+
+      setIsSavingPortalDemographics(false);
+      setShowPortalDemographicsForm(false);
+      if (soundFX) {
+        soundFX.playChime();
+      }
+      alert("✓ Datos demográficos de su Ficha Clínica actualizados con éxito.");
+    } catch (err) {
+      console.error("Error updating patient demographics from portal:", err);
+      alert("Ocurrió un error al guardar los cambios.");
+      setIsSavingPortalDemographics(false);
+    }
+  };
+
   // Handle Sync Button Submission
   const handleValidateIdentify = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1082,6 +1217,21 @@ export default function PatientPortal({ therapistUid, therapistName, sessionPric
                       <p className="font-mono text-[9px] text-gray-500 font-bold tracking-tight">{patientRut.toUpperCase()}</p>
                     </div>
 
+                    <div className="pt-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsDropdownOpen(false);
+                          setShowPortalDemographicsForm(true);
+                          setPortalConsentCheckbox(true);
+                        }}
+                        className="w-full flex items-center justify-center gap-1.5 bg-indigo-50 border border-indigo-100 hover:bg-indigo-100 dark:bg-slate-805 dark:border-slate-700 text-indigo-700 dark:text-cyan-400 text-[10px] font-extrabold p-2 rounded-xl transition cursor-pointer font-sans"
+                      >
+                        <User className="w-3.2 h-3.2 text-indigo-650 dark:text-cyan-400" />
+                        <span>Actualizar Datos Básicos</span>
+                      </button>
+                    </div>
+
                     <div className="pt-2.5 text-[9.5px] text-slate-650 dark:text-slate-400 space-y-2 font-medium">
                       <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-bold">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 block animate-pulse"></span>
@@ -1112,7 +1262,138 @@ export default function PatientPortal({ therapistUid, therapistName, sessionPric
 
           {/* Device Scrollbox Viewport representing the content container */}
           <div className="flex-1 overflow-y-auto p-4 bg-slate-50/50 dark:bg-slate-950/30 space-y-4 max-h-none md:max-h-[580px]">
-            
+
+            {(() => {
+              const isProfileIncomplete = currentPatient && (
+                !currentPatient.rut || 
+                !currentPatient.phone || 
+                currentPatient.phone === "No provisto" || 
+                !currentPatient.email || 
+                !currentPatient.name ||
+                currentPatient.phone.trim() === "" ||
+                currentPatient.rut.trim() === ""
+              );
+
+              if (currentPatient && (isProfileIncomplete || showPortalDemographicsForm)) {
+                return (
+                  <motion.div 
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="bg-amber-500/10 dark:bg-amber-450/5 border-2 border-amber-500/35 dark:border-amber-500/20 rounded-2xl p-4 space-y-3.5 shadow-sm text-slate-850 dark:text-slate-150"
+                  >
+                    <div className="flex items-start gap-2">
+                      <div className="p-1 px-2.5 bg-amber-500/20 text-amber-600 rounded-lg text-amber-500 shrink-0 font-extrabold">
+                        ⚠️
+                      </div>
+                      <div className="space-y-0.5">
+                        <h3 className="text-xs font-black text-amber-850 dark:text-amber-400 uppercase tracking-wide">
+                          {isProfileIncomplete ? "Ficha Clínica Incompleta" : "Actualizar Datos Básicos"}
+                        </h3>
+                        <p className="text-[10px] leading-relaxed text-slate-700 dark:text-slate-300 font-medium">
+                          En cumplimiento de la <strong>Ley Chilena N° 19.628 de Protección de Datos Personales</strong> y la <strong>Ley N° 20.584 de Derechos y Deberes en Salud</strong>, solicitamos regularizar la información obligatoria de su ficha terapéutica confidencial.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="bg-white/80 dark:bg-slate-900/80 p-3 rounded-xl text-[9px] leading-relaxed text-slate-650 dark:text-slate-400 border border-slate-150 dark:border-slate-850 space-y-1.5 font-sans">
+                      <p className="font-extrabold text-slate-800 dark:text-white uppercase tracking-wider text-[8.5px]">Propósitos de la Recopilación de Datos:</p>
+                      <ul className="list-disc pl-4 space-y-1 text-slate-600 dark:text-gray-300">
+                        <li><strong>Coordinación Eficiente:</strong> Despacho automático de notificaciones de horas, recordatorios SMS/mail y links directos a videollamadas cifradas.</li>
+                        <li><strong>Emisión Tributaria:</strong> Generación correcta de Boletas de Honorarios Electrónicas (BHE) ante el SII con sus datos válidos.</li>
+                        <li><strong>Reaseguro Clínico:</strong> Resguardo y contacto directo para coordinaciones de reaseguro clínico ante sospecha clínica fundada de riesgo.</li>
+                      </ul>
+                      <p className="pt-1.5 border-t border-slate-150 dark:border-slate-800 text-[#4f46e5] dark:text-cyan-400 font-bold text-[8.5px]">
+                        ✓ Secreto Profesional: Estos datos están estrictamente protegidos bajo secreto profesional inquebrantable clínico-médico.
+                      </p>
+                    </div>
+
+                    <form onSubmit={handleSavePortalDemographics} className="space-y-3 pt-1">
+                      <div className="space-y-2 text-left text-slate-800 dark:text-gray-200">
+                        <div className="space-y-1">
+                          <label className="text-[8.5px] font-bold uppercase text-gray-500 block">Nombre Completo</label>
+                          <input
+                            type="text"
+                            required
+                            placeholder="Ej: Sofia Silva"
+                            value={portalNameInput}
+                            onChange={(e) => setPortalNameInput(e.target.value)}
+                            className="w-full p-2.5 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-1 focus:ring-amber-500 focus:outline-none font-sans text-slate-900 dark:text-white"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[8.5px] font-bold uppercase text-gray-500 block">RUT / RUN</label>
+                          <input
+                            type="text"
+                            required
+                            placeholder="Ej: 19.382.115-3"
+                            value={portalRutInput}
+                            onChange={(e) => setPortalRutInput(e.target.value)}
+                            className="w-full p-2.5 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-1 focus:ring-amber-500 focus:outline-none font-mono text-slate-900 dark:text-white"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[8.5px] font-bold uppercase text-gray-500 block">Correo Electrónico</label>
+                          <input
+                            type="email"
+                            required
+                            placeholder="Ej: sofia@correo.com"
+                            value={portalEmailInput}
+                            onChange={(e) => setPortalEmailInput(e.target.value)}
+                            className="w-full p-2.5 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-1 focus:ring-amber-500 focus:outline-none font-mono text-slate-900 dark:text-white"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[8.5px] font-bold uppercase text-gray-500 block">Teléfono Móvil de Contacto</label>
+                          <input
+                            type="tel"
+                            required
+                            placeholder="Ej: +56912345678"
+                            value={portalPhoneInput}
+                            onChange={(e) => setPortalPhoneInput(e.target.value)}
+                            className="w-full p-2.5 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-1 focus:ring-amber-500 focus:outline-none font-sans text-slate-900 dark:text-white"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex items-start gap-2 bg-white/60 dark:bg-slate-900/60 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800">
+                        <input
+                          type="checkbox"
+                          required
+                          id="portalAcceptConsent"
+                          checked={portalConsentCheckbox}
+                          onChange={(e) => setPortalConsentCheckbox(e.target.checked)}
+                          className="mt-0.5 h-3.5 w-3.5 rounded border-gray-300 text-amber-600 focus:ring-amber-500 cursor-pointer"
+                        />
+                        <label htmlFor="portalAcceptConsent" className="text-[9.5px]/snug text-slate-650 dark:text-slate-400 leading-normal select-none cursor-pointer">
+                          Autorizo los fines descritos sobre el tratamiento médico confidencial de mis datos básicos en mi Ficha de Paciente.
+                        </label>
+                      </div>
+
+                      <div className="flex justify-end gap-2 text-[10px] font-bold pt-1.5">
+                        {showPortalDemographicsForm && !isProfileIncomplete && (
+                          <button
+                            type="button"
+                            onClick={() => setShowPortalDemographicsForm(false)}
+                            className="px-3.5 py-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl text-slate-600 dark:text-slate-400 transition cursor-pointer"
+                          >
+                            Cerrar
+                          </button>
+                        )}
+                        <button
+                          type="submit"
+                          disabled={isSavingPortalDemographics}
+                          className="px-4 py-2 bg-amber-500 hover:bg-amber-600 dark:bg-amber-550 dark:hover:bg-amber-600 font-extrabold rounded-xl transition duration-150 cursor-pointer text-white shadow-sm flex items-center gap-1 uppercase"
+                        >
+                          {isSavingPortalDemographics ? "Guardando..." : "Confirmar y Registrar ✓"}
+                        </button>
+                      </div>
+                    </form>
+                  </motion.div>
+                );
+              }
+              return null;
+            })()}
+
             {/* Playstore Bottom Tab Simulators: Top buttons header to split columns into interactive viewtabs */}
             <div className="bg-white/70 dark:bg-slate-900/75 backdrop-blur-md border border-slate-150 dark:border-slate-850 p-1 rounded-2xl flex gap-1 justify-between select-none shadow-xs mb-2">
               <button

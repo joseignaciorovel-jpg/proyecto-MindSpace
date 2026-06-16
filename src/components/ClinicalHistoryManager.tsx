@@ -145,6 +145,13 @@ export default function ClinicalHistoryManager({ therapistUid, therapistName }: 
   const [customDocContent, setCustomDocContent] = useState("");
   const [isCopiedDoc, setIsCopiedDoc] = useState(false);
 
+  // States for demographic details completion (handy pocket modal)
+  const [patientToEditDemographics, setPatientToEditDemographics] = useState<Patient | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editRut, setEditRut] = useState("");
+  const [editEmail, setEditEmail] = useState("");
+  const [editPhone, setEditPhone] = useState("");
+
   // ==========================================
   // INNER EVOLUTION MODE AND DETAIL MODALS
   // ==========================================
@@ -936,7 +943,55 @@ ${therapistName || "Psicólogo/a Tratante"}`;
     return expectedDv === dv;
   };
 
-  // Create Patient Profile
+  const handleOpenEditDemographics = (p: Patient) => {
+    setPatientToEditDemographics(p);
+    setEditName(p.name || "");
+    setEditRut(p.rut || "");
+    setEditEmail(p.email || "");
+    setEditPhone(p.phone === "No provisto" ? "" : (p.phone || ""));
+  };
+
+  const handleSaveDemographics = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!patientToEditDemographics) return;
+    if (!editName.trim() || !editEmail.trim() || !editRut.trim()) {
+      alert("Por favor, rellene el nombre, correo electrónico y RUT.");
+      return;
+    }
+
+    if (!validateChileanRut(editRut)) {
+      alert("El RUT ingresado no es válido. Ejemplo correcto: 12.345.678-k");
+      return;
+    }
+
+    try {
+      const patientRef = doc(db, "patients", patientToEditDemographics.id);
+      const updatedData = {
+        name: editName.trim(),
+        rut: editRut.trim().toLowerCase(),
+        email: editEmail.trim().toLowerCase(),
+        phone: editPhone.trim() || "No provisto"
+      };
+
+      await updateDoc(patientRef, updatedData);
+
+      // Also update selected patient if it is the current one
+      if (selectedPatient?.id === patientToEditDemographics.id) {
+        setSelectedPatient({
+          ...selectedPatient,
+          ...updatedData
+        });
+      }
+
+      setPatientToEditDemographics(null);
+      alert("Datos demográficos actualizados con éxito.");
+    } catch (err) {
+      console.error("Error saving demographics:", err);
+      alert("Ocurrió un error al guardar los datos.");
+    }
+  };
+
+  // Create Patient Profile with duplicate check & merge logic
   const handleCreatePatient = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newPatientName || !newPatientEmail || !newPatientRut) {
@@ -947,6 +1002,64 @@ ${therapistName || "Psicólogo/a Tratante"}`;
     if (!validateChileanRut(newPatientRut)) {
       alert("El RUT ingresado no es válido. Ejemplo correcto: 12.345.678-k");
       return;
+    }
+
+    const normalizedEmail = newPatientEmail.trim().toLowerCase();
+    const normalizedRut = newPatientRut.trim().replace(/\./g, "").replace(/\-/g, "").toLowerCase();
+
+    // Check if a patient with the same RUT or Email already exists in currently loaded therapist's patients
+    const existingPatient = patients.find(p => {
+      const pRut = (p.rut || "").trim().replace(/\./g, "").replace(/\-/g, "").toLowerCase();
+      const pEmail = (p.email || "").trim().toLowerCase();
+      return (normalizedRut && pRut === normalizedRut) || (normalizedEmail && pEmail === normalizedEmail);
+    });
+
+    if (existingPatient) {
+      const isComplete = existingPatient.rut && existingPatient.phone && existingPatient.phone !== "No provisto" && existingPatient.email && existingPatient.name;
+      if (isComplete) {
+        alert(`Un paciente con este RUT/Email ya está registrado en tu base de datos (Nombre: ${existingPatient.name}, RUT: ${existingPatient.rut}). Seleccionaremos su ficha de inmediato.`);
+        setSelectedPatient(existingPatient);
+        setShowAddPatient(false);
+        return;
+      } else {
+        const confirmMerge = window.confirm(
+          `Ya existe un perfil parcial de este paciente (Nombre: ${existingPatient.name || "Sin nombre"}, RUT: ${existingPatient.rut || "No provisto"}).\n\n¿Desea actualizar y completar la ficha existente con los datos ingresados para evitar duplicados en el listado?`
+        );
+        if (confirmMerge) {
+          try {
+            const patientRef = doc(db, "patients", existingPatient.id);
+            const updatedData = {
+              name: newPatientName.trim(),
+              email: newPatientEmail.trim().toLowerCase(),
+              phone: newPatientPhone.trim() || "No provisto",
+              rut: newPatientRut.trim().toLowerCase(),
+              consentLawAccepted: true,
+              consentTimestamp: Timestamp.now()
+            };
+            await updateDoc(patientRef, updatedData);
+
+            // Clean up inputs
+            setNewPatientName("");
+            setNewPatientEmail("");
+            setNewPatientPhone("");
+            setNewPatientRut("");
+            setNewPatientConsent(false);
+            setShowAddPatient(false);
+
+            setSelectedPatient({
+              ...existingPatient,
+              ...updatedData
+            });
+            alert("✓ Ficha clínica completada y actualizada con éxito, previniendo duplicidad de filas.");
+          } catch (err) {
+            console.error("Error updating patient directly inside create flow:", err);
+            alert("Error al actualizar la ficha existente.");
+          }
+          return;
+        } else {
+          return; // cancel action
+        }
+      }
     }
 
     if (!newPatientConsent) {
@@ -1363,8 +1476,24 @@ ${therapistName || "Psicólogo/a Tratante"}`;
                 <div className={`text-[10px] mt-0.5 truncate shrink-0 ${selectedPatient?.id === p.id ? "text-slate-300" : "text-gray-400"}`}>
                   ✉️ {p.email}
                 </div>
-                <div className={`text-[10px] truncate shrink-0 ${selectedPatient?.id === p.id ? "text-slate-405" : "text-gray-450"}`}>
-                  📞 {p.phone}
+                <div className="flex items-center justify-between mt-1 text-[10px] gap-2">
+                  <div className={`truncate shrink-0 ${selectedPatient?.id === p.id ? "text-slate-300" : "text-gray-400"}`}>
+                    📞 {p.phone}
+                  </div>
+                  {(!p.rut || p.phone === "No provisto" || !p.email || p.phone.trim() === "") && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleOpenEditDemographics(p);
+                      }}
+                      className="bg-indigo-550 hover:bg-indigo-600 text-white font-bold text-[8.5px] py-0.5 px-1.5 rounded-md transition shrink-0 cursor-pointer flex items-center gap-0.5 shadow-xs"
+                      title="Completar datos demográficos clínicos"
+                    >
+                      <Plus className="w-2.5 h-2.5" />
+                      <span>Completar</span>
+                    </button>
+                  )}
                 </div>
               </button>
             ))
@@ -1428,6 +1557,14 @@ ${therapistName || "Psicólogo/a Tratante"}`;
                       ✓ Ley 19.628 / 20.584 OK
                     </span>
                   )}
+                  <button
+                    type="button"
+                    onClick={() => handleOpenEditDemographics(selectedPatient)}
+                    className="bg-amber-500/15 hover:bg-amber-550/30 text-amber-400 border border-amber-500/30 text-[10.5px] font-bold px-3 py-1.5 rounded-xl inline-flex items-center gap-1.5 cursor-pointer transition-all active:scale-95 shadow-sm"
+                    title="Editar y completar todos los datos demográficos básicos del paciente"
+                  >
+                    ✏️ Editar Ficha
+                  </button>
                 </div>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mt-4 pt-4 border-t border-slate-800 text-xs">
@@ -3143,6 +3280,98 @@ ${therapistName || "Psicólogo/a Tratante"}`;
                   className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-xl font-bold transition-all shadow-sm flex items-center gap-1 cursor-pointer"
                 >
                   ⚡ Validar y Firmar Documento
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {patientToEditDemographics && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-[110] p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl p-6 max-w-md w-full border border-gray-150 shadow-2xl space-y-4 text-left">
+            <div className="flex justify-between items-center bg-indigo-50 text-indigo-900 p-3 rounded-xl border border-indigo-150">
+              <div className="flex items-center gap-1.5 font-bold text-xs uppercase tracking-tight">
+                <FileCheck2 className="w-4 h-4 text-indigo-650" />
+                Completar Ficha Demográfica del Paciente
+              </div>
+              <button 
+                type="button" 
+                onClick={() => setPatientToEditDemographics(null)}
+                className="text-gray-400 hover:text-gray-700 text-sm font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-[11px] text-gray-500 leading-relaxed">
+              En resguardo de su confidencialidad personal según la <strong>Ley 19.628 de Protección de Datos</strong>, por favor registre correctamente la información demográfica básica obligatoria de contacto clínico y fiscalización.
+            </p>
+
+            <form onSubmit={handleSaveDemographics} className="space-y-4">
+              <div className="space-y-1 text-xs">
+                <label className="block text-gray-600 font-bold">Nombre Completo del Paciente</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ej: Sofia Silva"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="w-full p-2.5 rounded-xl border border-gray-250 bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                />
+              </div>
+
+              <div className="space-y-1 text-xs">
+                <label className="block text-gray-600 font-bold">RUT / RUN (Identificador Nacional Clínico)</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ej: 19.382.115-3"
+                  value={editRut}
+                  onChange={(e) => setEditRut(e.target.value)}
+                  className="w-full p-2.5 rounded-xl border border-gray-250 bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                />
+              </div>
+
+              <div className="space-y-1 text-xs">
+                <label className="block text-gray-600 font-bold">Correo Electrónico Contable/Clínico</label>
+                <input
+                  type="email"
+                  required
+                  placeholder="Ej: sofia@correo.com"
+                  value={editEmail}
+                  onChange={(e) => setEditEmail(e.target.value)}
+                  className="w-full p-2.5 rounded-xl border border-gray-250 bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                />
+              </div>
+
+              <div className="space-y-1 text-xs">
+                <label className="block text-gray-600 font-bold">Teléfono de Coordinación Móvil</label>
+                <input
+                  type="tel"
+                  placeholder="Ej: +56912345678"
+                  value={editPhone}
+                  onChange={(e) => setEditPhone(e.target.value)}
+                  className="w-full p-2.5 rounded-xl border border-gray-250 bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                />
+              </div>
+
+              <div className="bg-slate-50 p-2.5 rounded-xl text-[9.5px] text-slate-500 leading-relaxed">
+                ✓ <strong>Integridad en Ficha Clínica:</strong> Estos datos se guardan con codificación cifrada y se aplican de inmediato en la generación de Boletas de Honorarios Electrónicas ante el SII.
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t text-xs">
+                <button
+                  type="button"
+                  onClick={() => setPatientToEditDemographics(null)}
+                  className="px-3.5 py-2 border rounded-xl hover:bg-slate-55 font-semibold cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="bg-indigo-650 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl font-bold transition-all shadow-sm flex items-center gap-1 cursor-pointer"
+                >
+                  Guardar Datos Demográficos
                 </button>
               </div>
             </form>
