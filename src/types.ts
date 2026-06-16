@@ -24,7 +24,7 @@ export interface Appointment {
   consentLawAccepted?: boolean;
   date: string; // ISO YYYY-MM-DD
   timeSlot: string; // e.g., "09:00 - 10:00"
-  status: "scheduled" | "completed" | "canceled";
+  status: "scheduled" | "completed" | "canceled" | "payment_pending" | "attended" | "rescheduled" | "nsp";
   paymentStatus: "pending" | "paid";
   price: number;
   notes: string;

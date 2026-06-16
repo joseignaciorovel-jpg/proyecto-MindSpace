@@ -50,11 +50,12 @@ async function updateAppointmentStatusPaid(appId: string, amount: number) {
     const databaseId = FIRESTORE_DATABASE_ID_RESOLVED;
     const apiKey = FIRESTORE_API_KEY_RESOLVED;
 
-    let url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${databaseId}/documents/appointments/${appId}?key=${apiKey}&updateMask.fieldPaths=paymentStatus`;
+    let url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${databaseId}/documents/appointments/${appId}?key=${apiKey}&updateMask.fieldPaths=paymentStatus&updateMask.fieldPaths=status`;
     
     const body: any = {
       fields: {
-        paymentStatus: { stringValue: "paid" }
+        paymentStatus: { stringValue: "paid" },
+        status: { stringValue: "scheduled" }
       }
     };
 
@@ -81,7 +82,7 @@ async function updateAppointmentStatusPaid(appId: string, amount: number) {
       body.fields.boletaLiquido = { integerValue: String(liquidoVal) };
     }
 
-    console.log(`[Firestore REST] Attempting to mark appointment ${appId} as paid with amount $${amount || 50000} CLP...`);
+    console.log(`[Firestore REST] Attempting to mark appointment ${appId} as paid with amount $${amount || 50000} CLP and status to scheduled...`);
     const response = await fetch(url, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -91,12 +92,38 @@ async function updateAppointmentStatusPaid(appId: string, amount: number) {
     if (!response.ok) {
       console.error("[Firestore REST] Firestore update failed:", await response.text());
     } else {
-      console.log(`[Firestore REST] Successfully transitioned appointment ${appId} to PAID.`);
+      console.log(`[Firestore REST] Successfully transitioned appointment ${appId} to PAID / SCHEDULED.`);
     }
     return { folioNum, boletaUrl, retencionVal, liquidoVal };
   } catch (err) {
     console.error("[Firestore REST] Error updating appointment in Firestore:", err);
     return null;
+  }
+}
+
+/**
+ * Delete an appointment in Firestore using native REST calls
+ */
+async function deleteAppointment(appId: string) {
+  try {
+    const projectId = FIRESTORE_PROJECT_ID_RESOLVED;
+    const databaseId = FIRESTORE_DATABASE_ID_RESOLVED;
+    const apiKey = FIRESTORE_API_KEY_RESOLVED;
+
+    const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${databaseId}/documents/appointments/${appId}?key=${apiKey}`;
+    
+    console.log(`[Firestore REST] Attempting to delete unpaid/canceled appointment ${appId}...`);
+    const response = await fetch(url, {
+      method: "DELETE"
+    });
+
+    if (!response.ok) {
+      console.error("[Firestore REST] Firestore delete failed:", await response.text());
+    } else {
+      console.log(`[Firestore REST] Successfully deleted canceled appointment ${appId}.`);
+    }
+  } catch (err) {
+    console.error("[Firestore REST] Error deleting appointment in Firestore:", err);
   }
 }
 
@@ -466,6 +493,8 @@ app.post("/api/webhooks/flow", async (req, res) => {
 
   if (isApproved) {
     receiptInfo = await updateAppointmentStatusPaid(appId, numAmount);
+  } else {
+    await deleteAppointment(appId);
   }
 
   const rate2026 = 0.145;
@@ -671,6 +700,8 @@ app.all("/api/flow/return", async (req, res) => {
   if (isApproved && appId) {
     // Sincronizar estado en Firestore de forma transaccional descolgándonos de la seguridad del cliente
     receiptInfo = await updateAppointmentStatusPaid(appId, amountVal);
+  } else if (!isApproved && appId) {
+    await deleteAppointment(appId);
   }
 
   const disableSiiBilling = process.env.DISABLE_SII_BILLING !== "false";

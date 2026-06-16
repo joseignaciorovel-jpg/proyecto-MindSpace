@@ -255,7 +255,21 @@ export default function BookingCalendar({
     const booked = allAppointments
       .filter((appt) => {
         const isSameDate = normalizeDateStr(appt.date) === normalizeDateStr(date);
-        const isActive = appt.status !== "canceled";
+        // Exclude expired pre-reservations and rescheduled items from blocking active slots
+        let isActive = appt.status !== "canceled" && appt.status !== "rescheduled" && appt.status !== "nsp";
+        
+        if (appt.status === "payment_pending") {
+          try {
+            const createdAtMillis = appt.createdAt ? (appt.createdAt.seconds ? appt.createdAt.seconds * 1000 : appt.createdAt) : 0;
+            const diffMinutes = (Date.now() - createdAtMillis) / (1000 * 60);
+            if (diffMinutes > 15) {
+              isActive = false;
+            }
+          } catch (e) {
+            isActive = false;
+          }
+        }
+        
         return isSameDate && isActive;
       })
       .map((appt) => appt.timeSlot);
@@ -359,12 +373,114 @@ export default function BookingCalendar({
       // Double-booking check right before reservation is finalized
       const existingSnap = await getDoc(apptDocRef);
       if (existingSnap.exists() && existingSnap.data().status !== "canceled") {
-        setPaymentError("Disculpas, este horario ya se encuentra ocupado. Alguien acaba de reservarlo hace unos momentos. Por favor vuelva atrás y elija otra hora.");
-        setLoading(false);
-        return;
+        const existingData = existingSnap.data() as any;
+        let isOcupado = true;
+        
+        // If it's a pending payment, check if it has expired (15 minutes threshold)
+        if (existingData.status === "payment_pending") {
+          const createdAtMillis = existingData.createdAt ? (existingData.createdAt.seconds ? existingData.createdAt.seconds * 1000 : existingData.createdAt) : 0;
+          const diffMinutes = (Date.now() - createdAtMillis) / (1000 * 60);
+          if (diffMinutes > 15) {
+            isOcupado = false; // Claim expired block
+          }
+        }
+        
+        if (isOcupado) {
+          setPaymentError("Disculpas, este horario ya se encuentra ocupado o en proceso de reserva activa. Por favor vuelva atrás y elija otra hora.");
+          setLoading(false);
+          return;
+        }
       }
       
-      const newAppointment: Appointment = {
+      const formatAndMaskRut = (rawRut: string): string => {
+        if (!rawRut) return "No registrado";
+        const clean = rawRut.trim().replace(/\./g, "").replace(/\-/g, "");
+        if (clean.length < 2) return rawRut;
+        const body = clean.slice(0, -1);
+        if (body.length >= 6) {
+          const firstPart = body.slice(0, 2);
+          const secondPart = body.slice(2, 5);
+          return `${firstPart}.${secondPart}.XXX-X`;
+        }
+        return "XX.XXX.XXX-X";
+      };
+      
+      const maskedRut = formatAndMaskRut(rut);
+      const portalUrl = `${window.location.origin}/?portal=patient`;
+      
+      const subject = `Confirmación de Agendamiento de Sesión Psicológica - MindSpace`;
+      const bodyContent = `
+        <div style="font-family: Arial, sans-serif; max-width: 580px; margin: 0 auto; padding: 25px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #f8fafc;">
+          <div style="border-bottom: 2px solid #0f172a; padding-bottom: 15px; margin-bottom: 20px;">
+            <h2 style="color: #0f172a; margin: 0; font-size: 18px;">📅 Su Reserva ha sido Registrada con Éxito</h2>
+            <p style="color: #64748b; margin: 5px 0 0 0; font-size: 11px;">MindSpace - Consulta Profesional</p>
+          </div>
+          
+          <p style="font-size: 13px; color: #1e293b; line-height: 1.6;">
+            Estimado(a) <strong>${name}</strong>,
+          </p>
+          
+          <p style="font-size: 13px; color: #334155; line-height: 1.6;">
+            Se ha agendado con éxito una sesión en el consultorio virtual con el terapeuta. A continuación se detallan los datos de su cita:
+          </p>
+          
+          <div style="background-color: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 15px; margin: 20px 0; text-align: left;">
+            <p style="margin: 4px 0; font-size: 12px; color: #334155;"><strong>Profesional:</strong> ${therapistName}</p>
+            <p style="margin: 4px 0; font-size: 12px; color: #334155;"><strong>Paciente:</strong> ${name}</p>
+            <p style="margin: 4px 0; font-size: 12px; color: #334155;"><strong>RUT:</strong> ${maskedRut} <span style="color: #64748b; font-size: 11px;">(Enmascarado por Confidencialidad)</span></p>
+            <p style="margin: 4px 0; font-size: 12px; color: #334155;"><strong>Fecha:</strong> ${date}</p>
+            <p style="margin: 4px 0; font-size: 12px; color: #334155;"><strong>Horario:</strong> ${timeSlot} hrs</p>
+            <p style="margin: 4px 0; font-size: 12px; color: #334155;"><strong>Valor Sesión:</strong> $${sessionPrice.toLocaleString("es-CL")} CLP (Boleta SII exenta)</p>
+          </div>
+
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${portalUrl}" style="background-color: #b91c1c; color: #ffffff; padding: 14px 28px; text-decoration: none; font-weight: bold; border-radius: 12px; font-size: 14px; display: inline-block; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);">
+              💻 Ingresar al Portal / Unirse a Sesión
+            </a>
+          </div>
+
+          <div style="background-color: #f1f5f9; border-radius: 10px; padding: 15px; margin: 20px 0; text-align: left; font-size: 12px; color: #475569; line-height: 1.5;">
+            <strong style="color: #1e293b; display: block; margin-bottom: 5px;">🔄 ¿Necesita Reagendar o Cancelar su cita?</strong>
+            Puede solicitar cambios de horario o cancelar su sesión directamente ingresando a su <a href="${portalUrl}" style="color: #b91c1c; font-weight: bold; text-decoration: underline;">Portal del Paciente</a> aquí, hasta con 24 horas de anticipación.
+          </div>
+
+          <div style="background-color: #fef08a; border-radius: 10px; padding: 15px; margin: 20px 0; text-align: left; font-size: 12px; color: #713f12; line-height: 1.5;">
+            <strong style="color: #854d0e; display: block; margin-bottom: 5px;">🚨 SOPORTE TÉCNICO Y DE EMERGENCIAS</strong>
+            Si experimenta algún inconveniente para conectarse el día de su cita o necesita ayuda, por favor contáctenos de inmediato:<br/>
+            📧 <strong>Soporte Técnico:</strong> <a href="mailto:soporte@mindspace.cl" style="color: #854d0e; text-decoration: underline;">soporte@mindspace.cl</a> o <a href="mailto:joseignacio.rovel@gmail.com" style="color: #854d0e; text-decoration: underline;">joseignacio.rovel@gmail.com</a><br/>
+            📞 <strong>Teléfono de Emergencia:</strong> +56 9 9345 6172
+          </div>
+
+          <div style="border-top: 1px solid #e2e8f0; padding-top: 15px; margin-top: 25px; font-size: 10px; color: #94a3b8; text-align: center;">
+            <p>Este comprobante clínico es estrictamente confidencial de acuerdo a la Ley 20.584 chilena.</p>
+            <p>© 2026 MindSpace Chile. Soluciones de Salud Mental y Bienestar Integrado.</p>
+          </div>
+        </div>
+      `;
+
+      const clinicianEmail = "joseignacio.rovel@gmail.com";
+      const clinicianSubject = `⚠️ NUEVO AGENDAMIENTO: ${name} - ${date} @ ${timeSlot}`;
+      const clinicianBody = `
+        <div style="font-family: Arial, sans-serif; max-width: 580px; margin: 0 auto; padding: 25px; border: 1px solid #10b981; border-radius: 16px; background-color: #f0fdf4;">
+          <h2 style="color: #065f46; margin: 0 0 15px 0;">🎉 Nuevo Agendamiento Registrado</h2>
+          <p>Estimado(a) <strong>${therapistName}</strong>,</p>
+          <p>Se ha registrado un nuevo agendamiento en su portal médico. Por motivos de seguridad de la información y cumplimiento de la Ley 20.584, los datos de contacto y de identificación se han omitido de este correo y pueden revisarse directamente en el portal clínico seguro.</p>
+          
+          <div style="background-color: #ffffff; border: 1px solid #a7f3d0; border-radius: 8px; padding: 15px; margin: 20px 0; text-align: left;">
+            <p style="margin: 4px 0; font-size: 13px; color: #1f2937;"><strong>Paciente:</strong> ${name}</p>
+            <p style="margin: 4px 0; font-size: 13px; color: #1f2937;"><strong>Fecha de Reserva:</strong> ${date}</p>
+            <p style="margin: 4px 0; font-size: 13px; color: #1f2937;"><strong>Bloque Horario:</strong> ${timeSlot} hrs</p>
+            <p style="margin: 4px 0; font-size: 13px; color: #1f2937;"><strong>Motivo o Notas del Paciente:</strong> ${notes || "Sin observaciones iniciales"}</p>
+          </div>
+          
+          <p style="font-size: 12px; color: #475569;">
+            Este correo de notificación fue despachado de forma segura mediante la integración de la API autorizada de Gmail.
+          </p>
+          <p style="font-size: 11px; color: #64748b; text-align: center; margin-top: 20px;">© 2026 MindSpace Chile. En cumplimiento de secreto médico.</p>
+        </div>
+      `;
+
+      const newAppointment: any = {
         id: apptId,
         patientId: "patient_" + Math.random().toString(36).substring(2, 8),
         patientName: name,
@@ -374,114 +490,23 @@ export default function BookingCalendar({
         consentLawAccepted: consentLaw,
         date,
         timeSlot,
-        status: "scheduled",
-        paymentStatus: "pending", // Starts pending per public schema permissions rule
+        status: "payment_pending",
+        paymentStatus: "pending",
         price: sessionPrice,
         notes: notes || "Sin observaciones iniciales",
         videoRoomId: "room_" + Math.random().toString(36).substring(2, 10),
         createdAt: Timestamp.now(),
-        ownerId: therapistUid
+        ownerId: therapistUid,
+        emailNotificationPending: true,
+        patientEmailSubject: subject,
+        patientEmailBody: bodyContent,
+        clinicianEmail: clinicianEmail,
+        clinicianEmailSubject: clinicianSubject,
+        clinicianEmailBody: clinicianBody
       };
 
       try {
         await setDoc(apptDocRef, newAppointment);
-
-        // Automatically send booking confirmation email via Gmail API if clinician is authenticated
-        const gmailToken = getCachedAccessToken();
-        if (gmailToken) {
-          if (email) {
-            const formatAndMaskRut = (rawRut: string): string => {
-              if (!rawRut) return "No registrado";
-              const clean = rawRut.trim().replace(/\./g, "").replace(/\-/g, "");
-              if (clean.length < 2) return rawRut;
-              const body = clean.slice(0, -1);
-              if (body.length >= 6) {
-                const firstPart = body.slice(0, 2);
-                const secondPart = body.slice(2, 5);
-                return `${firstPart}.${secondPart}.XXX-X`;
-              }
-              return "XX.XXX.XXX-X";
-            };
-            
-            const maskedRut = formatAndMaskRut(rut);
-            const portalUrl = `${window.location.origin}/?portal=patient`;
-            
-            const subject = `Confirmación de Agendamiento de Sesión Psicológica - MindSpace`;
-            const bodyContent = `
-              <div style="font-family: Arial, sans-serif; max-width: 580px; margin: 0 auto; padding: 25px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #f8fafc;">
-                <div style="border-bottom: 2px solid #0f172a; padding-bottom: 15px; margin-bottom: 20px;">
-                  <h2 style="color: #0f172a; margin: 0; font-size: 18px;">📅 Su Reserva ha sido Registrada con Éxito</h2>
-                  <p style="color: #64748b; margin: 5px 0 0 0; font-size: 11px;">MindSpace - Consulta Profesional</p>
-                </div>
-                
-                <p style="font-size: 13px; color: #1e293b; line-height: 1.6;">
-                  Estimado(a) <strong>${name}</strong>,
-                </p>
-                
-                <p style="font-size: 13px; color: #334155; line-height: 1.6;">
-                  Se ha agendado con éxito una sesión en el consultorio virtual con el terapeuta. A continuación se detallan los datos de su cita:
-                </p>
-                
-                <div style="background-color: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 15px; margin: 20px 0; text-align: left;">
-                  <p style="margin: 4px 0; font-size: 12px; color: #334155;"><strong>Profesional:</strong> ${therapistName}</p>
-                  <p style="margin: 4px 0; font-size: 12px; color: #334155;"><strong>Paciente:</strong> ${name}</p>
-                  <p style="margin: 4px 0; font-size: 12px; color: #334155;"><strong>RUT:</strong> ${maskedRut} <span style="color: #64748b; font-size: 11px;">(Enmascarado por Confidencialidad)</span></p>
-                  <p style="margin: 4px 0; font-size: 12px; color: #334155;"><strong>Fecha:</strong> ${date}</p>
-                  <p style="margin: 4px 0; font-size: 12px; color: #334155;"><strong>Horario:</strong> ${timeSlot} hrs</p>
-                  <p style="margin: 4px 0; font-size: 12px; color: #334155;"><strong>Valor Sesión:</strong> $${sessionPrice.toLocaleString("es-CL")} CLP (Boleta SII exenta)</p>
-                </div>
-
-                <div style="text-align: center; margin: 30px 0;">
-                  <a href="${portalUrl}" style="background-color: #b91c1c; color: #ffffff; padding: 14px 28px; text-decoration: none; font-weight: bold; border-radius: 12px; font-size: 14px; display: inline-block; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);">
-                    💻 Ingresar al Portal / Unirse a Sesión
-                  </a>
-                </div>
-
-                <div style="background-color: #f1f5f9; border-radius: 10px; padding: 15px; margin: 20px 0; text-align: left; font-size: 12px; color: #475569; line-height: 1.5;">
-                  <strong style="color: #1e293b; display: block; margin-bottom: 5px;">🔄 ¿Necesita Reagendar o Cancelar su cita?</strong>
-                  Puede solicitar cambios de horario o cancelar su sesión directamente ingresando a su <a href="${portalUrl}" style="color: #b91c1c; font-weight: bold; text-decoration: underline;">Portal del Paciente</a> aquí, hasta con 24 horas de anticipación.
-                </div>
-
-                <div style="background-color: #fef08a; border-radius: 10px; padding: 15px; margin: 20px 0; text-align: left; font-size: 12px; color: #713f12; line-height: 1.5;">
-                  <strong style="color: #854d0e; display: block; margin-bottom: 5px;">🚨 SOPORTE TÉCNICO Y DE EMERGENCIAS</strong>
-                  Si experimenta algún inconveniente para conectarse el día de su cita o necesita ayuda, por favor contáctenos de inmediato:<br/>
-                  📧 <strong>Soporte Técnico:</strong> <a href="mailto:soporte@mindspace.cl" style="color: #854d0e; text-decoration: underline;">soporte@mindspace.cl</a> o <a href="mailto:joseignacio.rovel@gmail.com" style="color: #854d0e; text-decoration: underline;">joseignacio.rovel@gmail.com</a><br/>
-                  📞 <strong>Teléfono de Emergencia:</strong> +56 9 9345 6172
-                </div>
-
-                <div style="border-top: 1px solid #e2e8f0; padding-top: 15px; margin-top: 25px; font-size: 10px; color: #94a3b8; text-align: center;">
-                  <p>Este comprobante clínico es estrictamente confidencial de acuerdo a la Ley 20.584 chilena.</p>
-                  <p>© 2026 MindSpace Chile. Soluciones de Salud Mental y Bienestar Integrado.</p>
-                </div>
-              </div>
-            `;
-            sendGmail(gmailToken, email, subject, bodyContent).catch((e) => console.error("Error sending booking email:", e));
-          }
-
-          // Also notify the clinician
-          const clinicianEmail = "joseignacio.rovel@gmail.com";
-          const clinicianSubject = `⚠️ NUEVO AGENDAMIENTO: ${name} - ${date} @ ${timeSlot}`;
-          const clinicianBody = `
-            <div style="font-family: Arial, sans-serif; max-width: 580px; margin: 0 auto; padding: 25px; border: 1px solid #10b981; border-radius: 16px; background-color: #f0fdf4;">
-              <h2 style="color: #065f46; margin: 0 0 15px 0;">🎉 Nuevo Agendamiento Registrado</h2>
-              <p>Estimado(a) <strong>${therapistName}</strong>,</p>
-              <p>Se ha registrado un nuevo agendamiento en su portal médico. Por motivos de seguridad de la información y cumplimiento de la Ley 20.584, los datos de contacto y de identificación se han omitido de este correo y pueden revisarse directamente en el portal clínico seguro.</p>
-              
-              <div style="background-color: #ffffff; border: 1px solid #a7f3d0; border-radius: 8px; padding: 15px; margin: 20px 0; text-align: left;">
-                <p style="margin: 4px 0; font-size: 13px; color: #1f2937;"><strong>Paciente:</strong> ${name}</p>
-                <p style="margin: 4px 0; font-size: 13px; color: #1f2937;"><strong>Fecha de Reserva:</strong> ${date}</p>
-                <p style="margin: 4px 0; font-size: 13px; color: #1f2937;"><strong>Bloque Horario:</strong> ${timeSlot} hrs</p>
-                <p style="margin: 4px 0; font-size: 13px; color: #1f2937;"><strong>Motivo o Notas del Paciente:</strong> ${notes || "Sin observaciones iniciales"}</p>
-              </div>
-              
-              <p style="font-size: 12px; color: #475569;">
-                Este correo de notificación fue despachado de forma segura mediante la integración de la API autorizada de Gmail.
-              </p>
-              <p style="font-size: 11px; color: #64748b; text-align: center; margin-top: 20px;">© 2026 MindSpace Chile. En cumplimiento de secreto médico.</p>
-            </div>
-          `;
-          sendGmail(gmailToken, clinicianEmail, clinicianSubject, clinicianBody).catch((e) => console.error("Error sending clinician alert email:", e));
-        }
       } catch (err) {
         console.warn("[Firestore Write] Direct client write warning, attempting backend fallback: ", err);
       }

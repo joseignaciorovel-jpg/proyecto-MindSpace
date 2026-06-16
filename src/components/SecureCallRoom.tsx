@@ -1048,6 +1048,54 @@ export default function SecureCallRoom({
     }
   };
 
+  // Report the appointment as NSP (No-show), release database slot, and close the session
+  const handleReportNsp = async () => {
+    if (!appointmentId) return;
+    const confirmNsp = window.confirm(
+      "¿Está seguro de que desea reportar esta cita como NSP (Inasistencia del Paciente)?\n\nEsto actualizará el agendamiento a estado NSP permanentemente, apagará de forma segura su cámara/micrófono y lo devolverá a la agenda principal con la sesión concluida."
+    );
+    if (!confirmNsp) return;
+
+    try {
+      const { updateDoc, doc, Timestamp } = await import("firebase/firestore");
+      await updateDoc(doc(db, "appointments", appointmentId), {
+        status: "nsp",
+        attendanceStatus: "absent"
+      });
+
+      try {
+        const { addDoc, collection } = await import("firebase/firestore");
+        const activePatient = patients.find(p => p.id === selectedPatientId);
+        await addDoc(collection(db, "audit_logs"), {
+          patientId: selectedPatientId || "pat_unknown",
+          patientName: activePatient?.name || patientName || "Paciente",
+          action: "REPORTE_NSP",
+          detail: `Inasistencia (NSP) reportada por el profesional clínico. Tolerancia de espera superada o declarada manualmente.`,
+          timestamp: Timestamp.now()
+        });
+      } catch (logErr) {
+        console.error("Failed to write audit log for NSP:", logErr);
+      }
+
+      showNotification("🚫 Cita reportada como NSP con éxito. La videollamada ha sido finalizada y la agenda liberada.", "success");
+
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+      }
+      setIsVideoCallActive(false);
+      setCameraOn(false);
+      setMicOn(false);
+      setShowHangupModalCheck(false);
+
+      setTimeout(() => {
+        onLeaveCall();
+      }, 2000);
+    } catch (error: any) {
+      console.error("Failed to update status to nsp:", error);
+      showNotification("Error al reportar NSP: " + error.message, "error");
+    }
+  };
+
   // Safe videocall ending without closing the workspace and notes
   const handleFinishedVideocall = () => {
     setShowHangupModalCheck(true);
@@ -1402,11 +1450,11 @@ ${docName}`;
         console.error("Audit log register failed:", err);
       }
 
-      // Update Appointment with status: completed, and evolutionState: "draft" or "signed"
+      // Update Appointment with status: attended (for draft) or completed (for signed)
       if (appointmentId) {
         const { updateDoc, doc } = await import("firebase/firestore");
         await updateDoc(doc(db, "appointments", appointmentId), { 
-          status: "completed",
+          status: isSigned ? "completed" : "attended",
           evolutionState: isSigned ? "signed" : "draft"
         });
       }
@@ -1755,6 +1803,51 @@ ${docName}`;
           {/* 1. Header & Tabs switcher for clinician / doctor workspace */}
           {isClinician ? (
             <div className="flex flex-col gap-3 shrink-0 mb-4">
+              {/* Wait Time Tracker & Reactive NSP Suggestion */}
+              {duration >= 30 ? (
+                <div className="bg-rose-950/45 border border-rose-500/35 p-3 rounded-xl text-left space-y-2 animate-in fade-in duration-300">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="w-5 h-5 text-rose-450 shrink-0 mt-0.5 animate-pulse" />
+                    <div>
+                      <h6 className="text-[11.5px] font-black text-rose-300">⚠️ Tolerancia de Espera Realizada</h6>
+                      <p className="text-[10px] text-slate-300 leading-normal mt-0.5">
+                        Transcurrieron {duration >= 900 ? "más de 15 minutos" : `${duration} segundos (modo prueba de tolerancia de 15 min)`} de espera sin conexión del paciente. ¿Desea registrar inasistencia y finalizar?
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={handleReportNsp}
+                      className="flex-1 bg-rose-600 hover:bg-rose-550 text-white font-extrabold text-[9px] py-1.5 px-3 rounded-lg transition uppercase flex items-center justify-center gap-1 cursor-pointer"
+                    >
+                      <ShieldAlert className="w-3.5 h-3.5" />
+                      <span>Registrar NSP y Cerrar Ficha</span>
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-slate-900 border border-slate-805 p-3 rounded-xl text-left space-y-1.5">
+                  <div className="flex items-center justify-between text-[10px] text-slate-400">
+                    <span className="flex items-center gap-1">
+                      <Clock className="w-3 h-3 text-indigo-400 animate-pulse" /> Espera reglamentaria:
+                    </span>
+                    <span className="font-mono bg-slate-950 px-1.5 py-0.5 rounded text-indigo-400 font-bold text-[9px]">
+                      {Math.floor(duration / 60)} min : {(duration % 60).toString().padStart(2, "0")} s / 15:00 min
+                    </span>
+                  </div>
+                  <div className="w-full bg-slate-950 h-1.5 rounded-full overflow-hidden">
+                    <div 
+                      className="bg-indigo-500 h-full transition-all duration-1000" 
+                      style={{ width: `${Math.min((duration / 900) * 100, 100)}%` }}
+                    />
+                  </div>
+                  <p className="text-[9px] text-slate-500 leading-tight">
+                    Tolerancia estipulada de 15 minutos en curso. Al completarse, se habilitará la opción para cerrar la ficha como NSP. (Modo simulación: sugerencia activa a los 30s de sala).
+                  </p>
+                </div>
+              )}
+
               <div className="flex flex-col bg-slate-900 border border-slate-805 rounded-xl p-1 gap-1">
                 <div className="flex flex-wrap gap-1">
                   <button
@@ -3338,23 +3431,34 @@ ${docName}`;
                 {isClinician ? (
                   <div className="flex flex-col gap-2 pt-1">
                     {isVideoCallActive ? (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsVideoCallActive(false);
-                          setCameraOn(false);
-                          setMicOn(false);
-                          if (streamRef.current) {
-                            streamRef.current.getTracks().forEach((track) => track.stop());
-                          }
-                          setShowHangupModalCheck(false);
-                          alert("📞 Videollamada finalizada. Se ha habilitado la redacción de la evolución y ficha clínica al 100%.");
-                        }}
-                        className="w-full bg-rose-600 hover:bg-rose-500 text-white font-extrabold text-[10px] py-2 rounded-xl border border-rose-500 transition cursor-pointer flex items-center justify-center gap-1 uppercase"
-                      >
-                        <Phone className="w-3.5 h-3.5 transform rotate-[135deg]" />
-                        <span>Colgar Video y Escribir Ficha</span>
-                      </button>
+                      <div className="space-y-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsVideoCallActive(false);
+                            setCameraOn(false);
+                            setMicOn(false);
+                            if (streamRef.current) {
+                              streamRef.current.getTracks().forEach((track) => track.stop());
+                            }
+                            setShowHangupModalCheck(false);
+                            alert("📞 Videollamada finalizada. Se ha habilitado la redacción de la evolución y ficha clínica al 100%.");
+                          }}
+                          className="w-full bg-rose-600 hover:bg-rose-500 text-white font-extrabold text-[10px] py-2.5 rounded-xl border border-rose-500 transition cursor-pointer flex items-center justify-center gap-1 uppercase"
+                        >
+                          <Phone className="w-3.5 h-3.5 transform rotate-[135deg]" />
+                          <span>Colgar Video y Escribir Ficha</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={handleReportNsp}
+                          className="w-full bg-rose-950/80 hover:bg-rose-900 border border-rose-800/80 text-rose-300 font-extrabold text-[10px] py-2.5 rounded-xl transition cursor-pointer flex items-center justify-center gap-1 uppercase"
+                        >
+                          <ShieldAlert className="w-3.5 h-3.5" />
+                          <span>Reportar como NSP (Inasistencia)</span>
+                        </button>
+                      </div>
                     ) : null}
                     
                     <button

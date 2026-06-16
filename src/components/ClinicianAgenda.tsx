@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { collection, query, where, onSnapshot, doc, updateDoc, deleteDoc, setDoc, Timestamp } from "firebase/firestore";
+import { collection, query, where, onSnapshot, doc, updateDoc, deleteDoc, setDoc, Timestamp, addDoc } from "firebase/firestore";
 import { db, handleFirestoreError, OperationType } from "../firebase";
 import { Appointment, Patient } from "../types";
 import { 
@@ -35,6 +35,21 @@ function normalizeDateStr(dStr: any): string {
   return str;
 }
 
+function isNspTimeThresholdExceeded(dateStr: string, timeSlotStr: string): boolean {
+  try {
+    const startStr = timeSlotStr.split("-")[0].trim();
+    const parts = startStr.split(":");
+    if (parts.length < 2) return false;
+    const [hours, minutes] = parts.map(Number);
+    const [year, month, day] = dateStr.split("-").map(Number);
+    const appointmentStartDate = new Date(year, month - 1, day, hours, minutes, 0, 0);
+    const nspThresholdDate = new Date(appointmentStartDate.getTime() + 15 * 60 * 1000);
+    return Date.now() > nspThresholdDate.getTime();
+  } catch (e) {
+    return false;
+  }
+}
+
 interface ClinicianAgendaProps {
   therapistUid: string;
   onJoinCall: (roomId: string, patientMeta?: { id?: string; name?: string; appointmentId?: string }) => void;
@@ -46,7 +61,7 @@ export default function ClinicianAgenda({ therapistUid, onJoinCall }: ClinicianA
   const [loading, setLoading] = useState(true);
 
   // Filter state
-  const [statusFilter, setStatusFilter] = useState<"all" | "scheduled" | "completed" | "canceled">("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "scheduled" | "completed" | "canceled" | "attended" | "rescheduled" | "nsp">("all");
   const [paymentFilter, setPaymentFilter] = useState<"all" | "pending" | "paid">("all");
   const [dateFilter, setDateFilter] = useState("");
 
@@ -677,6 +692,43 @@ export default function ClinicianAgenda({ therapistUid, onJoinCall }: ClinicianA
     return () => unsubscribe();
   }, [therapistUid]);
 
+  // Background delivery auto-sender for pending notification emails once paid/approved
+  useEffect(() => {
+    const gmailToken = getCachedAccessToken();
+    if (!gmailToken || appointments.length === 0) return;
+
+    // Find scheduled appointments where the payment is completed but email notifications are still pending
+    const pendingNotifications = appointments.filter(
+      (appt: any) => appt.status === "scheduled" && appt.emailNotificationPending === true
+    );
+
+    if (pendingNotifications.length === 0) return;
+
+    pendingNotifications.forEach(async (appt: any) => {
+      try {
+        console.log(`[Email Hub] Found paid booking needing notification dispatch: ${appt.id}`);
+        
+        // 1. Mark as in-flight / false immediately to prevent concurrent duplicate delivery loops
+        const apptRef = doc(db, "appointments", appt.id);
+        await updateDoc(apptRef, { emailNotificationPending: false });
+
+        // 2. Dispatch patient email
+        if (appt.patientEmail && appt.patientEmailSubject && appt.patientEmailBody) {
+          await sendGmail(gmailToken, appt.patientEmail, appt.patientEmailSubject, appt.patientEmailBody);
+          console.log(`[Email Hub] Patient mail successfully dispatched for ${appt.id}`);
+        }
+
+        // 3. Dispatch clinician email
+        if (appt.clinicianEmail && appt.clinicianEmailSubject && appt.clinicianEmailBody) {
+          await sendGmail(gmailToken, appt.clinicianEmail, appt.clinicianEmailSubject, appt.clinicianEmailBody);
+          console.log(`[Email Hub] Clinician status notification dispatched for ${appt.id}`);
+        }
+      } catch (err) {
+        console.error(`[Email Hub] Error processing automatic background email for appointment ${appt.id}:`, err);
+      }
+    });
+  }, [appointments]);
+
   // 2. Fetch list of patients to allow manual assignments
   useEffect(() => {
     if (!therapistUid) return;
@@ -724,13 +776,16 @@ export default function ClinicianAgenda({ therapistUid, onJoinCall }: ClinicianA
   const getUnifiedStateKey = (appt: Appointment) => {
     if (appt.isCrisis) return "crisis";
     if (appt.status === "canceled") return "canceled";
-    if (appt.status === "completed") {
-      if (appt.evolutionState === "draft") return "completed_draft";
+    if (appt.status === "rescheduled") return "rescheduled";
+    if (appt.status === "nsp" || (appt.status === "scheduled" && isNspTimeThresholdExceeded(appt.date, appt.timeSlot) && appt.attendanceStatus !== "confirmed")) {
+      return "nsp";
+    }
+    if (appt.status === "completed" || appt.status === "attended") {
+      if (appt.evolutionState === "draft" || !appt.evolutionState) return "completed_draft";
       return "completed_signed";
     }
     if (appt.paymentStatus !== "paid") return "unpaid";
     if (appt.attendanceStatus === "confirmed") return "ready";
-    if (appt.attendanceStatus === "nsp") return "nsp";
     return "scheduled_pending";
   };
 
@@ -777,14 +832,20 @@ export default function ClinicianAgenda({ therapistUid, onJoinCall }: ClinicianA
       case "ready":
         label = "En Sala (Paciente Listo)";
         IconComponent = CheckCircle; // green checkmark
-        iconColor = "text-emerald-550 dark:text-emerald-400 animate-pulse";
+        iconColor = "text-emerald-555 dark:text-emerald-400 animate-pulse";
         textColor = "text-emerald-700 dark:text-emerald-450 font-bold";
         break;
+      case "rescheduled":
+        label = "🔄 Reagendada";
+        IconComponent = RefreshCw;
+        iconColor = "text-sky-505 dark:text-sky-400";
+        textColor = "text-sky-655 dark:text-sky-450 font-extrabold";
+        break;
       case "nsp":
-        label = "No Presentado (NSP)";
+        label = "🔴 NSP (No Se Presentó)";
         IconComponent = ShieldAlert;
-        iconColor = "text-red-500/80 dark:text-red-400/80";
-        textColor = "text-slate-500 dark:text-slate-400";
+        iconColor = "text-red-500 dark:text-red-400";
+        textColor = "text-red-600 dark:text-red-400 font-bold";
         break;
       case "scheduled_pending":
       default:
@@ -973,19 +1034,24 @@ export default function ClinicianAgenda({ therapistUid, onJoinCall }: ClinicianA
   };
 
   const handleJoinCallWithForceCheckIn = async (appt: Appointment) => {
-    if (appt.attendanceStatus === "pending") {
-      try {
-        const apptRef = doc(db, "appointments", appt.id);
-        await updateDoc(apptRef, {
-          attendanceStatus: "confirmed",
-          checkedInAt: Timestamp.now()
-        });
+    try {
+      const apptRef = doc(db, "appointments", appt.id);
+      const updateData: any = {
+        status: "attended"
+      };
+
+      if (appt.attendanceStatus === "pending") {
+        updateData.attendanceStatus = "confirmed";
+        updateData.checkedInAt = Timestamp.now();
         const apptMsg = `[Clínico] 👨‍⚕️ El profesional inició el video y admitió automáticamente al paciente "${appt.patientName}" en la sala.`;
         setNotificationLogs(prev => [apptMsg, ...prev]);
-      } catch (e) {
-        console.error("Failed to automatically confirm attendance:", e);
       }
+
+      await updateDoc(apptRef, updateData);
+    } catch (e) {
+      console.error("Failed to automatically confirm attendance and set status to attended:", e);
     }
+
     const finalPatientId = (() => {
       if (appt.patientId && appt.patientId.startsWith("pat_")) {
         return appt.patientId;
@@ -1025,7 +1091,7 @@ export default function ClinicianAgenda({ therapistUid, onJoinCall }: ClinicianA
         date: apptDate,
         timeSlot: apptSlot,
         status: "scheduled",
-        paymentStatus: "pending",
+        paymentStatus: "paid",
         price: apptPrice,
         notes: apptNotes || "Cita agendada manualmente por el terapeuta.",
         videoRoomId: "room_" + Math.random().toString(36).substring(2, 11),
@@ -1062,7 +1128,18 @@ export default function ClinicianAgenda({ therapistUid, onJoinCall }: ClinicianA
 
   // Filter application
   const filteredAppts = appointments.filter((appt) => {
-    const matchesStatus = statusFilter === "all" || appt.status === statusFilter;
+    // Exclude expired pre-reservations from active list
+    if (appt.status === "payment_pending") {
+      try {
+        const createdAtMillis = appt.createdAt ? (appt.createdAt.seconds ? appt.createdAt.seconds * 1000 : appt.createdAt) : 0;
+        const diffMinutes = (Date.now() - createdAtMillis) / (1000 * 60);
+        if (diffMinutes > 15) return false;
+      } catch (e) {
+        return false;
+      }
+    }
+    const effectiveStatus = appt.status === "scheduled" && isNspTimeThresholdExceeded(appt.date, appt.timeSlot) && appt.attendanceStatus !== "confirmed" ? "nsp" : appt.status;
+    const matchesStatus = statusFilter === "all" || effectiveStatus === statusFilter;
     const matchesPayment = paymentFilter === "all" || appt.paymentStatus === paymentFilter;
     const matchesDate = !dateFilter || appt.date === dateFilter;
     return matchesStatus && matchesPayment && matchesDate;
@@ -2168,38 +2245,102 @@ export default function ClinicianAgenda({ therapistUid, onJoinCall }: ClinicianA
                               if (isAtenderActive) {
                                 const isPatientReady = uKey === "ready" || appt.isCrisis === true;
                                 return (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleJoinCallWithForceCheckIn(appt)}
-                                    className="py-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white border border-emerald-750 rounded-xl flex items-center gap-1.5 font-bold shadow-md transition-all cursor-pointer hover:scale-102 active:scale-98 animate-pulse"
-                                    title={isPatientReady ? "¡Ingresar a la consulta ahora! El paciente ya está en sala." : "¡Ingresar a la consulta! El paciente aún está por ingresar (su ingreso se confirmará automáticamente al unirse)."}
-                                  >
-                                    <Video className="w-3.5 h-3.5 text-white" />
-                                    <span>Atender {isPatientReady ? "" : "(Pre-admitir)"}</span>
-                                  </button>
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleJoinCallWithForceCheckIn(appt)}
+                                      className="py-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white border border-emerald-750 rounded-xl flex items-center gap-1.5 font-bold shadow-md transition-all cursor-pointer hover:scale-102 active:scale-98 animate-pulse"
+                                      title={isPatientReady ? "¡Ingresar a la consulta ahora! El paciente ya está en sala." : "¡Ingresar a la consulta! El paciente aún está por ingresar (su ingreso se confirmará automáticamente al unirse)."}
+                                    >
+                                      <Video className="w-3.5 h-3.5 text-white" />
+                                      <span>Atender {isPatientReady ? "" : "(Pre-admitir)"}</span>
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={async () => {
+                                        const confirmNsp = window.confirm(`¿Está seguro de que desea marcar el turno de "${appt.patientName}" como NSP (Inasistencia)?\n\nEsto liberará el bloque correspondiente.`);
+                                        if (!confirmNsp) return;
+                                        try {
+                                          const apptRef = doc(db, "appointments", appt.id);
+                                          await updateDoc(apptRef, {
+                                            status: "nsp",
+                                            attendanceStatus: "absent"
+                                          });
+                                          await addDoc(collection(db, "audit_logs"), {
+                                            patientId: appt.patientId || "pat_unknown",
+                                            patientName: appt.patientName,
+                                            action: "AGENDA_MANUAL_NSP",
+                                            detail: `Clínico marcó manualmente como NSP desde la Grilla de Turnos Diarios.`,
+                                            timestamp: Timestamp.now()
+                                          });
+                                          alert("🚫 Cita registrada como NSP con éxito.");
+                                        } catch (e: any) {
+                                          alert("Error al actualizar estado: " + e.message);
+                                        }
+                                      }}
+                                      className="py-1.5 px-2 bg-rose-50/10 hover:bg-rose-500/20 text-rose-500 border border-rose-200 dark:border-rose-900 rounded-xl flex items-center gap-1 font-bold cursor-pointer transition-all"
+                                      title="Registrar inasistencia del paciente (NSP) manualmente"
+                                    >
+                                      <ShieldAlert className="w-3.5 h-3.5" />
+                                      <span>NSP</span>
+                                    </button>
+                                  </>
                                 );
                               } else {
                                 return (
-                                  <button
-                                    type="button"
-                                    disabled
-                                    className="py-1.5 px-3 bg-emerald-600 text-white border border-emerald-700/50 rounded-xl flex items-center gap-1.5 font-bold cursor-not-allowed select-none opacity-40"
-                                    title="Consulta inactiva: Se habilitará cuando empiece el bloque horario de la consulta."
-                                  >
-                                    <Video className="w-3.5 h-3.5 text-white" />
-                                    <span>Atender</span>
-                                  </button>
+                                  <>
+                                    <button
+                                      type="button"
+                                      disabled
+                                      className="py-1.5 px-3 bg-emerald-600 text-white border border-emerald-700/50 rounded-xl flex items-center gap-1.5 font-bold cursor-not-allowed select-none opacity-40"
+                                      title="Consulta inactiva: Se habilitará cuando empiece el bloque horario de la consulta."
+                                    >
+                                      <Video className="w-3.5 h-3.5 text-white" />
+                                      <span>Atender</span>
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={async () => {
+                                        const confirmNsp = window.confirm(`¿Está seguro de que desea marcar el turno de "${appt.patientName}" como NSP (Inasistencia)?\n\nEsto liberará el bloque correspondiente.`);
+                                        if (!confirmNsp) return;
+                                        try {
+                                          const apptRef = doc(db, "appointments", appt.id);
+                                          await updateDoc(apptRef, {
+                                            status: "nsp",
+                                            attendanceStatus: "absent"
+                                          });
+                                          await addDoc(collection(db, "audit_logs"), {
+                                            patientId: appt.patientId || "pat_unknown",
+                                            patientName: appt.patientName,
+                                            action: "AGENDA_MANUAL_NSP",
+                                            detail: `Clínico marcó manualmente como NSP desde la Grilla de Turnos Diarios (horario no iniciado).`,
+                                            timestamp: Timestamp.now()
+                                          });
+                                          alert("🚫 Cita registrada como NSP con éxito.");
+                                        } catch (e: any) {
+                                          alert("Error al actualizar estado: " + e.message);
+                                        }
+                                      }}
+                                      className="py-1.5 px-2 bg-rose-50/10 hover:bg-rose-500/20 text-rose-500 border border-rose-200 dark:border-rose-900 rounded-xl flex items-center gap-1 font-bold cursor-pointer transition-all"
+                                      title="Registrar inasistencia del paciente (NSP) manualmente"
+                                    >
+                                      <ShieldAlert className="w-3.5 h-3.5" />
+                                      <span>NSP</span>
+                                    </button>
+                                  </>
                                 );
                               }
                             })()}
 
-                            {appt.status === "completed" && (
-                              appt.evolutionState === "draft" ? (
+                            {(appt.status === "completed" || appt.status === "attended") && (
+                              (appt.evolutionState === "draft" || !appt.evolutionState) ? (
                                 <button
                                   type="button"
                                   onClick={() => handleJoinCallWithForceCheckIn(appt)}
                                   className="py-1.5 px-3 bg-amber-500 hover:bg-amber-600 border border-amber-600 rounded-xl flex items-center gap-1.5 font-bold shadow-md transition-all cursor-pointer text-white"
-                                  title="La videollamada ha concluido. Presione para completar y firmar la evolución clínica de esta sesión."
+                                  title="La videollamada ha concluido o está en curso. Presione para completar y firmar la evolución clínica de esta sesión."
                                 >
                                   <Edit className="w-3.5 h-3.5 text-white animate-pulse" />
                                   <span>Completar</span>
@@ -2277,6 +2418,9 @@ export default function ClinicianAgenda({ therapistUid, onJoinCall }: ClinicianA
                 >
                   <option value="all">📅 Todos los Estados</option>
                   <option value="scheduled">🟢 Programados</option>
+                  <option value="attended">🟡 Atendidos (Borrador)</option>
+                  <option value="rescheduled">🔄 Reagendados</option>
+                  <option value="nsp">🔴 No Se Presentó (NSP)</option>
                   <option value="completed">🔵 Completados</option>
                   <option value="canceled">🔴 Cancelados</option>
                 </select>
@@ -2381,23 +2525,87 @@ export default function ClinicianAgenda({ therapistUid, onJoinCall }: ClinicianA
                           if (isAtenderActive) {
                             const isPatientReady = uKey === "ready" || appt.isCrisis === true;
                             return (
-                              <button
-                                onClick={() => handleJoinCallWithForceCheckIn(appt)}
-                                className="p-2 bg-emerald-600 hover:bg-emerald-700 text-white border border-emerald-750 rounded-xl flex items-center gap-1.5 shadow-md transition-all text-[11px] font-bold cursor-pointer hover:scale-102 active:scale-98 animate-pulse"
-                                title={isPatientReady ? "¡Unirse a la Videollamada Cifrada de Grado de Consulta activa!" : "¡Ingresar a la consulta! El paciente aún está por ingresar (su ingreso se confirmará automáticamente al unirse)."}
-                              >
-                                <Video className="w-3.5 h-3.5 text-slate-100" /> Atender Video {isPatientReady ? "" : "(Pre-admitir)"}
-                              </button>
+                              <>
+                                <button
+                                  onClick={() => handleJoinCallWithForceCheckIn(appt)}
+                                  className="p-2 bg-emerald-600 hover:bg-emerald-700 text-white border border-emerald-750 rounded-xl flex items-center gap-1.5 shadow-md transition-all text-[11px] font-bold cursor-pointer hover:scale-102 active:scale-98 animate-pulse"
+                                  title={isPatientReady ? "¡Unirse a la Videollamada Cifrada de Grado de Consulta activa!" : "¡Ingresar a la consulta! El paciente aún está por ingresar (su ingreso se confirmará automáticamente al unirse)."}
+                                >
+                                  <Video className="w-3.5 h-3.5 text-slate-100" /> Atender Video {isPatientReady ? "" : "(Pre-admitir)"}
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    const confirmNsp = window.confirm(`¿Está seguro de que desea marcar el turno de "${appt.patientName}" como NSP (Inasistencia)?\n\nEsto liberará el bloque correspondiente.`);
+                                    if (!confirmNsp) return;
+                                    try {
+                                      const apptRef = doc(db, "appointments", appt.id);
+                                      await updateDoc(apptRef, {
+                                        status: "nsp",
+                                        attendanceStatus: "absent"
+                                      });
+                                      await addDoc(collection(db, "audit_logs"), {
+                                        patientId: appt.patientId || "pat_unknown",
+                                        patientName: appt.patientName,
+                                        action: "AGENDA_MANUAL_NSP",
+                                        detail: `Clínico marcó manualmente como NSP desde la Lista de Próximas Citas.`,
+                                        timestamp: Timestamp.now()
+                                      });
+                                      alert("🚫 Cita registrada como NSP con éxito.");
+                                    } catch (e: any) {
+                                      alert("Error al actualizar estado: " + e.message);
+                                    }
+                                  }}
+                                  className="p-2 bg-rose-50/10 hover:bg-rose-500/20 text-rose-500 border border-rose-200 dark:border-rose-900 rounded-xl flex items-center gap-1 text-[11px] font-bold cursor-pointer transition-all"
+                                  title="Registrar inasistencia del paciente (NSP) manualmente"
+                                >
+                                  <ShieldAlert className="w-3.5 h-3.5" />
+                                  <span>NSP</span>
+                                </button>
+                              </>
                             );
                           } else {
                             return (
-                              <button
-                                disabled
-                                className="p-2 bg-emerald-600 text-white border border-emerald-700/50 rounded-xl flex items-center gap-1.5 text-[11px] font-bold cursor-not-allowed select-none opacity-40"
-                                title="Consulta inactiva: Se habilitará cuando el bloque de horario empiece."
-                              >
-                                <Video className="w-3.5 h-3.5 text-white" /> Atender Video
-                              </button>
+                              <>
+                                <button
+                                  disabled
+                                  className="p-2 bg-emerald-600 text-white border border-emerald-700/50 rounded-xl flex items-center gap-1.5 text-[11px] font-bold cursor-not-allowed select-none opacity-40"
+                                  title="Consulta inactiva: Se habilitará cuando el bloque de horario empiece."
+                                >
+                                  <Video className="w-3.5 h-3.5 text-white" /> Atender Video
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    const confirmNsp = window.confirm(`¿Está seguro de que desea marcar el turno de "${appt.patientName}" como NSP (Inasistencia)?\n\nEsto liberará el bloque correspondiente.`);
+                                    if (!confirmNsp) return;
+                                    try {
+                                      const apptRef = doc(db, "appointments", appt.id);
+                                      await updateDoc(apptRef, {
+                                        status: "nsp",
+                                        attendanceStatus: "absent"
+                                      });
+                                      await addDoc(collection(db, "audit_logs"), {
+                                        patientId: appt.patientId || "pat_unknown",
+                                        patientName: appt.patientName,
+                                        action: "AGENDA_MANUAL_NSP",
+                                        detail: `Clínico marcó manualmente como NSP desde la Lista de Próximas Citas (horario no iniciado).`,
+                                        timestamp: Timestamp.now()
+                                      });
+                                      alert("🚫 Cita registrada como NSP con éxito.");
+                                    } catch (e: any) {
+                                      alert("Error al actualizar estado: " + e.message);
+                                    }
+                                  }}
+                                  className="p-2 bg-rose-50/10 hover:bg-rose-500/20 text-rose-500 border border-rose-200 dark:border-rose-900 rounded-xl flex items-center gap-1 text-[11px] font-bold cursor-pointer transition-all"
+                                  title="Registrar inasistencia del paciente (NSP) manualmente"
+                                >
+                                  <ShieldAlert className="w-3.5 h-3.5" />
+                                  <span>NSP</span>
+                                </button>
+                              </>
                             );
                           }
                         })()}

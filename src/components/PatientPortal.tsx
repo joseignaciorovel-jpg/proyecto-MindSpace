@@ -32,6 +32,21 @@ function normalizeDateStr(dStr: any): string {
   return str;
 }
 
+function isNspTimeThresholdExceeded(dateStr: string, timeSlotStr: string): boolean {
+  try {
+    const startStr = timeSlotStr.split("-")[0].trim();
+    const parts = startStr.split(":");
+    if (parts.length < 2) return false;
+    const [hours, minutes] = parts.map(Number);
+    const [year, month, day] = dateStr.split("-").map(Number);
+    const appointmentStartDate = new Date(year, month - 1, day, hours, minutes, 0, 0);
+    const nspThresholdDate = new Date(appointmentStartDate.getTime() + 15 * 60 * 1000);
+    return Date.now() > nspThresholdDate.getTime();
+  } catch (e) {
+    return false;
+  }
+}
+
 // Local helper to track errors on Firestore
 enum OperationType {
   CREATE = "create",
@@ -358,21 +373,48 @@ export default function PatientPortal({ therapistUid, therapistName, sessionPric
 
     const currentRescheduleCount = reschedulingAppt.rescheduleCount || 0;
     if (currentRescheduleCount >= 3) {
-      setReschedError("Límite superado: Este turno de consulta ya tiene el máximo de 3 reagendamientos permitidos.");
+      setReschedError("Límite de cambios superado: Según nuestra política de términos y condiciones, has llegado al máximo de 3 reagendamientos permitidos para este bloque. Se procederá al cobro de la cita sin derecho a devolución de dinero.");
       return;
     }
 
     setReschedError("");
     try {
-      const apptRef = doc(db, "appointments", reschedulingAppt.id);
-      await updateDoc(apptRef, {
+      const oldApptRef = doc(db, "appointments", reschedulingAppt.id);
+      
+      // Update OLD appointment status to "rescheduled"
+      await updateDoc(oldApptRef, {
+        status: "rescheduled",
+        notes: `${reschedulingAppt.notes || ""} [Cita original reagendada con éxito al nuevo bloque ${reschedDate} a las ${reschedSlot}. Registro Intento Nº ${currentRescheduleCount + 1}]`
+      });
+
+      // Create a brand NEW active appointment with scheduled status
+      const newApptId = "appt_" + Math.random().toString(36).substring(2, 11);
+      const newApptRef = doc(db, "appointments", newApptId);
+      
+      const newAppointment = {
+        id: newApptId,
+        patientId: reschedulingAppt.patientId || "pat_unknown",
+        patientName: reschedulingAppt.patientName || "",
+        patientEmail: reschedulingAppt.patientEmail || "",
+        patientPhone: reschedulingAppt.patientPhone || "",
+        patientRut: reschedulingAppt.patientRut || "",
+        consentLawAccepted: reschedulingAppt.consentLawAccepted || true,
         date: reschedDate,
         timeSlot: reschedSlot,
-        rescheduleCount: currentRescheduleCount + 1,
-        attendanceStatus: "pending", // Reset
+        status: "scheduled",
+        attendanceStatus: "pending",
         checkedInAt: null,
-        notes: `${reschedulingAppt.notes || ""} [Reagendado por el paciente al turno ${reschedDate} @ ${reschedSlot}. Registro Intento #${currentRescheduleCount + 1}]`
-      });
+        paymentStatus: reschedulingAppt.paymentStatus || "paid",
+        price: reschedulingAppt.price || 50000,
+        videoRoomId: reschedulingAppt.videoRoomId || "room_" + Math.random().toString(36).substring(2, 11),
+        createdAt: Timestamp.now(),
+        ownerId: reschedulingAppt.ownerId || (therapistUid || "therapist_default"),
+        rescheduleCount: currentRescheduleCount + 1,
+        emailNotificationPending: true, // Will trigger automatic notification flow!
+        notes: `[Nueva cita producto de Reagendamiento #${currentRescheduleCount + 1}] Sesión anterior correspondía a ${reschedulingAppt.date} @ ${reschedulingAppt.timeSlot}. Notas previas: ${reschedulingAppt.notes || "Ninguna."}`,
+      };
+
+      await setDoc(newApptRef, newAppointment);
 
       setReschedulingSuccess(true);
       setTimeout(() => {
@@ -1167,21 +1209,29 @@ export default function PatientPortal({ therapistUid, therapistName, sessionPric
                       const appDateObj = new Date(app.date + "T12:00:00");
                       const appDateFormatted = appDateObj.toLocaleDateString("es-CL", { weekday: "long", day: "numeric", month: "long" });
                       const isPaid = app.paymentStatus === "paid";
+                      const isNsp = app.status === "nsp" || (app.status === "scheduled" && isNspTimeThresholdExceeded(app.date, app.timeSlot) && app.attendanceStatus !== "confirmed");
                       
                       return (
                         <div 
                           key={app.id} 
-                          className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-150 dark:border-slate-85 border-l-4 border-l-emerald-500 space-y-3"
+                          className={`p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-150 dark:border-slate-85 border-l-4 space-y-3 ${
+                            isNsp ? "border-l-rose-500 opacity-90" : app.status === "rescheduled" ? "border-l-sky-500" : "border-l-emerald-500"
+                          }`}
                         >
                           <div className="flex justify-between items-start gap-1">
                             <div>
                               <p className="font-extrabold text-xs text-slate-850 dark:text-gray-200 capitalize">{appDateFormatted}</p>
                               <p className="text-[10px] font-mono text-gray-500 font-bold dark:text-slate-400 mt-0.5">{app.timeSlot}</p>
                             </div>
-                            <span className={`text-[9px] font-bold uppercase p-1 px-2 rounded-md ${
-                              isPaid ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-955/35 dark:text-emerald-450" : "bg-amber-100 text-amber-850 dark:bg-amber-955/25 dark:text-amber-450"
+                            <span className={`text-[9.5px] font-bold uppercase p-1 px-2 rounded-md ${
+                              isNsp ? "bg-red-100 text-red-800 dark:bg-red-955/35 dark:text-red-400" :
+                              app.status === "rescheduled" ? "bg-sky-100 text-sky-800 dark:bg-sky-955/35 dark:text-sky-400" :
+                              isPaid ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-955/35 dark:text-emerald-450" : 
+                              "bg-amber-100 text-amber-850 dark:bg-amber-955/25 dark:text-amber-450"
                             }`}>
-                              {isPaid ? "✓ PAGADA" : "● PRE-RESERVADA"}
+                              {isNsp ? "● INASISTENCIA (NSP)" :
+                               app.status === "rescheduled" ? "🔄 REAGENDADA" :
+                               isPaid ? "✓ PAGADA" : "● PRE-RESERVADA"}
                             </span>
                           </div>
 
@@ -1194,7 +1244,7 @@ export default function PatientPortal({ therapistUid, therapistName, sessionPric
                                   <span className="font-mono text-cyan-600 dark:text-cyan-400 font-extrabold">SII Folio Nº {app.boletaFolio || "20260492"}</span>
                                 </div>
                                 <div className="flex justify-between text-[10px] text-slate-500 dark:text-slate-400">
-                                  <span>Retención Profesional SII (14,5%):</span>
+                                  <span>Retención SII (14,5%):</span>
                                   <span className="font-mono text-amber-600 font-bold">-${(app.boletaRetencion || Math.round((app.price || 50000) * 0.145)).toLocaleString('es-CL')} CLP</span>
                                 </div>
                                 <div className="flex justify-between text-[10px] text-slate-500 dark:text-slate-400">
@@ -1241,12 +1291,26 @@ export default function PatientPortal({ therapistUid, therapistName, sessionPric
 
                           {/* Reschedule count indicator if any */}
                           {app.rescheduleCount && app.rescheduleCount > 0 ? (
-                            <p className="text-[9.5px] text-amber-700 bg-amber-50 dark:bg-amber-950/20 px-2 py-1 rounded font-bold">
-                              🔄 Reagendado: Intento {app.rescheduleCount} de 3 permitidos
-                            </p>
+                            <div className="space-y-1">
+                              <p className="text-[9.5px] text-amber-700 bg-amber-50 dark:bg-amber-950/20 px-2 py-1 rounded font-bold">
+                                🔄 Reagendado: Intento {app.rescheduleCount} de 3 permitidos
+                              </p>
+                              {app.rescheduleCount >= 3 && (
+                                <p className="text-[9px] text-red-700 bg-red-50 dark:bg-rose-950/25 px-2 py-1.5 rounded-lg border border-red-200 dark:border-rose-900 font-medium leading-normal">
+                                  ⚠️ Límite de reagendamientos alcanzado. Conforme a las políticas corporativas, no es posible aplicar más cambios. Se aplicará el cobro de la sesión sin derecho a reembolso.
+                                </p>
+                              )}
+                            </div>
                           ) : null}
 
-                          {app.status === "scheduled" ? (
+                          {isNsp ? (
+                            <div className="bg-red-50 dark:bg-rose-950/20 text-red-700 dark:text-rose-400 p-3 rounded-xl border border-red-200 dark:border-rose-900/50 text-[10.5px] font-sans space-y-1">
+                              <p className="font-bold">❌ Videoconsulta Bloqueada (NSP)</p>
+                              <p className="text-[10px] leading-relaxed opacity-95">
+                                La sesión tiene un límite de tolerancia establecido de 15 minutos. Al no presentarse ni anunciar con previa anticipación (mínimo 2 horas antes), la videoconsulta ha quedado desafectada de forma definitiva.
+                              </p>
+                            </div>
+                          ) : app.status === "scheduled" ? (
                             <div className="pt-1.5 flex flex-col gap-2">
                               {/* Join call button */}
                               <button
@@ -1258,7 +1322,7 @@ export default function PatientPortal({ therapistUid, therapistName, sessionPric
                               </button>
 
                               {/* Policy modification button row */}
-                              <div className="w-full flex gap-1.5 mt-1 border-t border-slate-150 dark:border-slate-850 pt-2 text-[10px]">
+                              <div className="w-full flex gap-1.5 mt-1 border-t border-slate-150 dark:border-slate-85 pt-2 text-[10px]">
                                 {(() => {
                                   const { canModify, hoursRemaining } = checkCanModifyAppointment(app.date, app.timeSlot);
                                   const matchesLimit = (app.rescheduleCount || 0) < 3;
@@ -1273,7 +1337,7 @@ export default function PatientPortal({ therapistUid, therapistName, sessionPric
                                             return;
                                           }
                                           if (!matchesLimit) {
-                                            alert("Límite superado: Has alcanzado el límite máximo de tres reagendamientos permitidos para este bloque.");
+                                            alert("Límite superado: Has alcanzado el límite máximo de tres reagendamientos permitidos para este bloque. De acuerdo al contrato, se procederá al cobro sin opción de devolución.");
                                             return;
                                           }
                                           setReschedulingAppt(app);
@@ -1316,7 +1380,11 @@ export default function PatientPortal({ therapistUid, therapistName, sessionPric
                           ) : (
                             <div className="bg-slate-100 dark:bg-slate-900 p-2.5 rounded-xl text-center border">
                               <span className="text-[10px] font-bold text-slate-500 uppercase">
-                                {app.status === "completed" ? "✅ Sesión Finalizada" : "🚫 Reserva Anulada"}
+                                {app.status === "completed" ? "✅ Sesión Finalizada" :
+                                 app.status === "attended" ? "🟡 Atendido (Evolución en borrador)" :
+                                 app.status === "rescheduled" ? "🔄 Cita Reagendada con Éxito" :
+                                 app.status === "nsp" ? "🔴 Inasistencia (NSP)" :
+                                 "🚫 Reserva Anulada"}
                               </span>
                             </div>
                           )}
