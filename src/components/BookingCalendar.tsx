@@ -390,6 +390,22 @@ export default function BookingCalendar({
         const gmailToken = getCachedAccessToken();
         if (gmailToken) {
           if (email) {
+            const formatAndMaskRut = (rawRut: string): string => {
+              if (!rawRut) return "No registrado";
+              const clean = rawRut.trim().replace(/\./g, "").replace(/\-/g, "");
+              if (clean.length < 2) return rawRut;
+              const body = clean.slice(0, -1);
+              if (body.length >= 6) {
+                const firstPart = body.slice(0, 2);
+                const secondPart = body.slice(2, 5);
+                return `${firstPart}.${secondPart}.XXX-X`;
+              }
+              return "XX.XXX.XXX-X";
+            };
+            
+            const maskedRut = formatAndMaskRut(rut);
+            const portalUrl = `${window.location.origin}/?portal=patient`;
+            
             const subject = `Confirmación de Agendamiento de Sesión Psicológica - MindSpace`;
             const bodyContent = `
               <div style="font-family: Arial, sans-serif; max-width: 580px; margin: 0 auto; padding: 25px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #f8fafc;">
@@ -409,19 +425,33 @@ export default function BookingCalendar({
                 <div style="background-color: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 15px; margin: 20px 0; text-align: left;">
                   <p style="margin: 4px 0; font-size: 12px; color: #334155;"><strong>Profesional:</strong> ${therapistName}</p>
                   <p style="margin: 4px 0; font-size: 12px; color: #334155;"><strong>Paciente:</strong> ${name}</p>
-                  <p style="margin: 4px 0; font-size: 12px; color: #334155;"><strong>RUT:</strong> ${rut}</p>
+                  <p style="margin: 4px 0; font-size: 12px; color: #334155;"><strong>RUT:</strong> ${maskedRut} <span style="color: #64748b; font-size: 11px;">(Enmascarado por Confidencialidad)</span></p>
                   <p style="margin: 4px 0; font-size: 12px; color: #334155;"><strong>Fecha:</strong> ${date}</p>
                   <p style="margin: 4px 0; font-size: 12px; color: #334155;"><strong>Horario:</strong> ${timeSlot} hrs</p>
                   <p style="margin: 4px 0; font-size: 12px; color: #334155;"><strong>Valor Sesión:</strong> $${sessionPrice.toLocaleString("es-CL")} CLP (Boleta SII exenta)</p>
                 </div>
 
-                <p style="font-size: 13px; color: #334155; line-height: 1.6;">
-                  Para acceder a su sala de videoconferencia privada o reajustar los datos de su cita, ingrese en el <strong>Portal de Pacientes</strong> en nuestro sitio.
-                </p>
+                <div style="text-align: center; margin: 30px 0;">
+                  <a href="${portalUrl}" style="background-color: #b91c1c; color: #ffffff; padding: 14px 28px; text-decoration: none; font-weight: bold; border-radius: 12px; font-size: 14px; display: inline-block; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);">
+                    💻 Ingresar al Portal / Unirse a Sesión
+                  </a>
+                </div>
+
+                <div style="background-color: #f1f5f9; border-radius: 10px; padding: 15px; margin: 20px 0; text-align: left; font-size: 12px; color: #475569; line-height: 1.5;">
+                  <strong style="color: #1e293b; display: block; margin-bottom: 5px;">🔄 ¿Necesita Reagendar o Cancelar su cita?</strong>
+                  Puede solicitar cambios de horario o cancelar su sesión directamente ingresando a su <a href="${portalUrl}" style="color: #b91c1c; font-weight: bold; text-decoration: underline;">Portal del Paciente</a> aquí, hasta con 24 horas de anticipación.
+                </div>
+
+                <div style="background-color: #fef08a; border-radius: 10px; padding: 15px; margin: 20px 0; text-align: left; font-size: 12px; color: #713f12; line-height: 1.5;">
+                  <strong style="color: #854d0e; display: block; margin-bottom: 5px;">🚨 SOPORTE TÉCNICO Y DE EMERGENCIAS</strong>
+                  Si experimenta algún inconveniente para conectarse el día de su cita o necesita ayuda, por favor contáctenos de inmediato:<br/>
+                  📧 <strong>Soporte Técnico:</strong> <a href="mailto:soporte@mindspace.cl" style="color: #854d0e; text-decoration: underline;">soporte@mindspace.cl</a> o <a href="mailto:joseignacio.rovel@gmail.com" style="color: #854d0e; text-decoration: underline;">joseignacio.rovel@gmail.com</a><br/>
+                  📞 <strong>Teléfono de Emergencia:</strong> +56 9 9345 6172
+                </div>
 
                 <div style="border-top: 1px solid #e2e8f0; padding-top: 15px; margin-top: 25px; font-size: 10px; color: #94a3b8; text-align: center;">
                   <p>Este comprobante clínico es estrictamente confidencial de acuerdo a la Ley 20.584 chilena.</p>
-                  <p>© 2026 MindSpace Chile. Soluciones Médicas Integradas.</p>
+                  <p>© 2026 MindSpace Chile. Soluciones de Salud Mental y Bienestar Integrado.</p>
                 </div>
               </div>
             `;

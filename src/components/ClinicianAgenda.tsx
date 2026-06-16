@@ -499,12 +499,13 @@ export default function ClinicianAgenda({ therapistUid, onJoinCall }: ClinicianA
 
       // Send clinical emergency suspension email via Gmail if clinician is integrated!
       if (gmailToken && appt.patientEmail) {
-        const subject = `AVISO: Reprogramación de consulta psicológica urgente - MindSpace Clinica`;
+        const portalUrl = `${window.location.origin}/?portal=patient`;
+        const subject = `AVISO: Reprogramación de consulta psicológica urgente - MindSpace`;
         const bodyContent = `
           <div style="font-family: Arial, sans-serif; max-width: 580px; margin: 0 auto; padding: 25px; border: 1px solid #fee2e2; border-radius: 16px; background-color: #fef2f2;">
             <div style="border-bottom: 2px solid #b91c1c; padding-bottom: 15px; margin-bottom: 20px;">
               <h2 style="color: #991b1b; margin: 0; font-size: 18px;">⚠️ Aviso de Suspensión de Agenda Clínica</h2>
-              <p style="color: #7f1d1d; margin: 5px 0 0 0; font-size: 11px;">MindSpace - Consulta Médica</p>
+              <p style="color: #7f1d1d; margin: 5px 0 0 0; font-size: 11px;">MindSpace - Psicología y Bienestar</p>
             </div>
             
             <p style="font-size: 13px; color: #1f2937; line-height: 1.6;">
@@ -512,7 +513,7 @@ export default function ClinicianAgenda({ therapistUid, onJoinCall }: ClinicianA
             </p>
             
             <p style="font-size: 13px; color: #374151; line-height: 1.6;">
-              Le informamos que por motivos de fuerza mayor de carácter de emergencia médica o personal, el analista o especialista clínico ha debido suspender temporalmente su agenda para la próxima fecha:
+              Le informamos que por motivos de fuerza mayor de carácter de emergencia personal o médica del profesional, se ha debido suspender temporalmente la agenda para su próxima cita:
             </p>
             
             <div style="background-color: #ffffff; border: 1px solid #fecaca; border-radius: 8px; padding: 15px; margin: 20px 0; text-align: center;">
@@ -521,21 +522,30 @@ export default function ClinicianAgenda({ therapistUid, onJoinCall }: ClinicianA
             </div>
 
             <p style="font-size: 13px; color: #374151; line-height: 1.6;">
-              Para velar por su continuidad clínica de inmediato, se le ha propuesto la siguiente alternativa de reagendamiento automático sin costo alguno:
+              Para velar por su continuidad terapéutica de inmediato, se le ha propuesto la siguiente alternativa de reagendamiento automático sin costo alguno:
             </p>
 
             <div style="background-color: #e0f2fe; border: 1px solid #bae6fd; border-radius: 8px; padding: 15px; margin: 20px 0; text-align: center;">
-              <span style="font-size: 11px; color: #0369a1; text-transform: uppercase; font-weight: bold; display: block; margin-bottom: 4px;">Nueva Alternativa Reagendada</span>
+              <span style="font-size: 11px; color: #0369a1; text-transform: uppercase; font-weight: bold; display: block; margin-bottom: 4px;">Nueva Alternativa Propuesta</span>
               <strong style="font-size: 15px; color: #0369a1; display: block;">${nextProposed.date} a las ${nextProposed.slot} hrs</strong>
             </div>
 
-            <p style="font-size: 12px; color: #4b5563;">
-              Para confirmar o modificar esta alternativa, por favor ingrese a su <strong>Portal del Paciente</strong> en nuestra web de reserva a la brevedad.
-            </p>
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${portalUrl}" style="background-color: #b91c1c; color: #ffffff; padding: 12px 24px; text-decoration: none; font-weight: bold; border-radius: 12px; font-size: 13px; display: inline-block; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+                🔄 Confirmar o Modificar esta Propuesta
+              </a>
+            </div>
+
+            <div style="background-color: #fef08a; border-radius: 10px; padding: 15px; margin: 20px 0; text-align: left; font-size: 11px; color: #713f12; line-height: 1.5;">
+              <strong>🚨 ¿NECESITA AYUDA O SOPORTE ADICIONAL?</strong><br/>
+              Si experimenta inconvenientes técnicos o tiene alguna duda sobre esta reprogramación, por favor contáctenos:<br/>
+              📧 <strong>Soporte Técnico:</strong> <a href="mailto:soporte@mindspace.cl" style="color: #854d0e; text-decoration: underline;">soporte@mindspace.cl</a> o <a href="mailto:joseignacio.rovel@gmail.com" style="color: #854d0e; text-decoration: underline;">joseignacio.rovel@gmail.com</a><br/>
+              📞 <strong>Línea de Coordinación:</strong> +56 9 9345 6172
+            </div>
 
             <div style="border-top: 1px solid #fca5a5; padding-top: 15px; margin-top: 25px; font-size: 10px; color: #9ca3af; text-align: center;">
               <p>Este aviso clínico ha sido despachado en tiempo real desde la casilla de enlace médico oficial.</p>
-              <p>© 2026 MindSpace Chile. Ley 20.584 de Derechos y Deberes del Paciente.</p>
+              <p>© 2026 MindSpace Chile. Soluciones de Salud Mental y Bienestar Integrado.</p>
             </div>
           </div>
         `;
