@@ -3217,7 +3217,7 @@ ${docName}`;
                       <InteractiveFeedbackCard
                         msg={msg}
                         idx={idx}
-                        therapistId={"default_psychologist_uid_123"}
+                        therapistId={therapistUid || "default_psychologist_uid_123"}
                         therapistName={therapistName || "Terapeuta"}
                         defaultPatientName={patientName || "Paciente Atendido"}
                         onUpdateFeedback={(msgIdx, feedback) => {

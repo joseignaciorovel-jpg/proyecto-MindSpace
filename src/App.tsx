@@ -166,9 +166,9 @@ export default function App() {
 
   // Listen for dynamic settings (profile, pricing, hours, channels)
   useEffect(() => {
-    // We bind all clinic records to "default_psychologist_uid_123" so public patient sessions
-    // scheduled while unauthenticated sync seamlessly with the Specialist Calendar view inside the dashboard.
-    const targetUid = "default_psychologist_uid_123";
+    // We bind all clinic records to the logged-in user's UID.
+    // If not logged in, we set the helper fallback "default_psychologist_uid_123" so public guest sessions sync seamlessly.
+    const targetUid = user ? user.uid : "default_psychologist_uid_123";
     setTherapistUid(targetUid);
     
     const docRef = doc(db, "settings", targetUid);
@@ -1246,6 +1246,7 @@ export default function App() {
         onClose={() => setShareModalOpen(false)}
         therapistName={user?.displayName || "Ps. José Ignacio Romero Velásquez"}
         therapistEmail={user?.email || "joseignacio.rovel@gmail.com"}
+        therapistUid={therapistUid}
       />
 
       {/* Terms of Service & Privacy modals */}

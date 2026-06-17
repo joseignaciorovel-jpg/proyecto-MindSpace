@@ -6,6 +6,7 @@ interface ShareReputationModalProps {
   onClose: () => void;
   therapistName: string;
   therapistEmail: string;
+  therapistUid?: string;
 }
 
 export default function ShareReputationModal({
@@ -13,6 +14,7 @@ export default function ShareReputationModal({
   onClose,
   therapistName,
   therapistEmail,
+  therapistUid,
 }: ShareReputationModalProps) {
   // Setup dynamic base URL & feedback share link
   const [shareUrl, setShareUrl] = useState("");
@@ -54,10 +56,11 @@ ${therapistName || "José Romero Velásquez"}`;
       ? window.location.origin 
       : "https://proyecto-mindspace-597030236952.southamerica-west1.run.app";
     const sanitizedTherapistName = encodeURIComponent(therapistName || "Ps. José Ignacio Romero Velásquez");
-    const link = `${productionOrigin}/?mode=review&therapistId=default_psychologist_uid_123&therapistName=${sanitizedTherapistName}`;
+    const docId = therapistUid || "default_psychologist_uid_123";
+    const link = `${productionOrigin}/?mode=review&therapistId=${docId}&therapistName=${sanitizedTherapistName}`;
     setShareUrl(link);
     setWebReservaUrl(productionOrigin);
-  }, [therapistName]);
+  }, [therapistName, therapistUid]);
 
   // Handle active preset message syncing
   useEffect(() => {
