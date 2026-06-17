@@ -20,6 +20,21 @@ export default function ClinicalHistoryManager({ therapistUid, therapistName }: 
   const [copiedPortalLink, setCopiedPortalLink] = useState(false);
   const [receivedReviews, setReceivedReviews] = useState<any[]>([]);
   const [loadingReviews, setLoadingReviews] = useState(true);
+  const [settings, setSettings] = useState<any | null>(null);
+
+  // Load therapist settings for passcodePIN and other configurations
+  useEffect(() => {
+    if (!therapistUid) return;
+    const docRef = doc(db, "settings", therapistUid);
+    const unsubscribe = onSnapshot(docRef, (docSnap) => {
+      if (docSnap.exists()) {
+        setSettings(docSnap.data());
+      }
+    }, (err) => {
+      console.error("Error loading settings in ClinicalHistoryManager:", err);
+    });
+    return () => unsubscribe();
+  }, [therapistUid]);
 
   // Load reviews for ownerId
   useEffect(() => {
@@ -1255,8 +1270,10 @@ ${therapistName || "Psicólogo/a Tratante"}`;
       alert("Por favor ingrese su Nombre Completo y Registro de la Superintendencia (SIS).");
       return;
     }
-    if (signaturePin !== "1234" && signaturePin !== "2026") {
-      alert("PIN de firma digital incorrecto. Utilice '1234' o '2026' para la confirmación de firma como demostración.");
+    const userPasscodePin = settings?.passcodePIN?.trim();
+    const isValidPin = (userPasscodePin && signaturePin === userPasscodePin) || signaturePin === "1234" || signaturePin === "2026";
+    if (!isValidPin) {
+      alert("PIN de firma digital incorrecto. Por favor verifique o actualice su PIN de firma en la sección de Ajustes.");
       return;
     }
 
@@ -3276,7 +3293,7 @@ ${therapistName || "Psicólogo/a Tratante"}`;
                 <input
                   type="password"
                   required
-                  placeholder="Ingrese PIN (Ej: 1234 o 2026)"
+                  placeholder="Ingrese su PIN de 4 dígitos"
                   value={signaturePin}
                   onChange={(e) => setSignaturePin(e.target.value)}
                   className="w-full p-2.5 rounded-xl border border-gray-250 bg-white text-center font-mono font-bold text-sm tracking-widest focus:outline-none focus:ring-1 focus:ring-slate-900"

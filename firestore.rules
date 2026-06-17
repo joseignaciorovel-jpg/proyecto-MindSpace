@@ -1,8 +1,144 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // ─────────────────────────────────────────────────────────
+    // Regla por defecto: TODO bloqueado salvo lo que se abra abajo.
+    // Esto reemplaza el "allow read, write: if true" actual.
+    // ─────────────────────────────────────────────────────────
     match /{document=**} {
-      allow read, write: if true;
+      allow read, write: if false;
     }
+
+    // Helper: ¿el usuario autenticado es el dueño de este recurso?
+    //
+    // NOTA TEMPORAL: todos los documentos existentes se crearon con
+    // ownerId = "default_psychologist_uid_123" (un string fijo que
+    // venía hardcodeado en App.tsx), en vez del UID real de Firebase
+    // Auth del terapeuta. Mientras se migra esa data, esta función
+    // acepta AMBOS valores como "soy el dueño" — pero solo si el
+    // usuario autenticado es exactamente el terapeuta real
+    // (NDmjbTte6wa5vgeIc2JASOfNhYi1). Esto no abre la puerta a nadie
+    // más: cualquier otra persona autenticada seguiría sin poder
+    // hacerse pasar por dueño de "default_psychologist_uid_123",
+    // porque solo coincide si TU uid real coincide.
+    //
+    // ACCIÓN PENDIENTE: una vez migrados todos los ownerId de
+    // Firestore al UID real, eliminar la comparación con el string
+    // fijo y dejar solo `request.auth.uid == ownerId`.
+    function isOwner(ownerId) {
+      return request.auth != null &&
+        (
+          request.auth.uid == ownerId ||
+          (
+            request.auth.uid == "NDmjbTte6wa5vgeIc2JASOfNhYi1" &&
+            ownerId == "default_psychologist_uid_123"
+          )
+        );
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // PATIENTS — fichas de pacientes
+    // Solo el terapeuta dueño puede leer/escribir/borrar.
+    // Los pacientes no tienen cuenta, así que NO se permite
+    // creación directa desde cliente no autenticado.
+    // (el auto-sync de pacientes externos debería migrarse a
+    // una Cloud Function con privilegios de admin)
+    // ─────────────────────────────────────────────────────────
+    match /patients/{patientId} {
+      allow read, update, delete: if isOwner(resource.data.ownerId);
+      allow create: if isOwner(request.resource.data.ownerId);
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // APPOINTMENTS — agenda de citas
+    // El terapeuta dueño puede leer/editar/borrar todo.
+    // Un visitante NO autenticado puede CREAR una cita nueva
+    // (porque el paciente no tiene login), pero solo si:
+    //   - el documento que intenta crear declara un ownerId válido
+    //   - el estado inicial es "payment_pending" (no puede crear
+    //     una cita ya "completed" o "paid" directamente)
+    // No puede leer, modificar ni borrar citas existentes.
+    // ─────────────────────────────────────────────────────────
+    match /appointments/{apptId} {
+      allow read, update, delete: if isOwner(resource.data.ownerId);
+
+      allow create: if
+        request.resource.data.ownerId is string &&
+        request.resource.data.status == "payment_pending" &&
+        request.resource.data.paymentStatus == "pending";
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // HISTORIES — fichas/evoluciones clínicas
+    // Estrictamente solo el terapeuta dueño. Nunca accesible
+    // por el paciente directamente (ni lectura ni escritura).
+    // ─────────────────────────────────────────────────────────
+    match /histories/{recordId} {
+      allow read, write: if isOwner(resource.data.ownerId);
+      allow create: if isOwner(request.resource.data.ownerId);
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // AUDIT LOGS / CLINICAL AUDITS — bitácoras
+    // Solo el terapeuta dueño puede leer y crear sus propios logs.
+    // IMPORTANTE: estos logs siguen sin ser una auditoría legal
+    // real (la IP que se guarda es simulada, no la real del cliente).
+    // Esto cierra el acceso de terceros, pero no resuelve ese
+    // problema de fondo — ver recomendación de migrar a Cloud
+    // Function con request.auth y la IP real del request.
+    // ─────────────────────────────────────────────────────────
+    match /audit_logs/{logId} {
+      allow read: if isOwner(resource.data.ownerId);
+      allow create: if isOwner(request.resource.data.ownerId);
+      allow update, delete: if false;
+    }
+
+    match /clinical_audits/{logId} {
+      allow read: if isOwner(resource.data.ownerId);
+      allow create: if isOwner(request.resource.data.ownerId);
+      allow update, delete: if false;
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // REVIEWS — reseñas de pacientes
+    // Cualquiera puede LEER las que tengan publicConsent == true
+    // (se muestran en el carrusel público). El dueño puede leer
+    // todas las suyas (públicas y privadas) y administrarlas.
+    // Un paciente sin cuenta puede CREAR una reseña nueva,
+    // pero no editar ni borrar reseñas existentes.
+    // ─────────────────────────────────────────────────────────
+    match /reviews/{reviewId} {
+      allow read: if resource.data.publicConsent == true || isOwner(resource.data.ownerId);
+      allow update, delete: if isOwner(resource.data.ownerId);
+      allow create: if request.resource.data.ownerId is string;
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // MOOD JOURNALS — bitácora de ánimo/sueño del paciente
+    // El paciente no tiene cuenta, así que puede crear/actualizar
+    // sus propios registros (identificados por rut/email, no por
+    // auth.uid). El terapeuta dueño puede leer todos los suyos.
+    // No se permite leer registros de otros pacientes desde
+    // cliente no autenticado.
+    // ─────────────────────────────────────────────────────────
+    match /mood_journals/{logId} {
+      allow read: if isOwner(resource.data.ownerId);
+      allow create: if request.resource.data.ownerId is string;
+      allow update: if request.resource.data.ownerId == resource.data.ownerId;
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // SETTINGS — configuración pública del consultorio
+    // (nombre del terapeuta, precio, horarios). Es información
+    // que el calendario público necesita leer sin login.
+    // Solo el dueño puede escribir.
+    // ─────────────────────────────────────────────────────────
+    match /settings/{settingsId} {
+      allow read: if true;
+      allow write: if isOwner(settingsId) || isOwner(resource.data.ownerId);
+    }
+
   }
 }

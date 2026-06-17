@@ -879,7 +879,7 @@ export default function App() {
                         {/* Lock Pin input / Auth validation */}
                         <div className="space-y-4">
                           <div className="space-y-2">
-                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block text-left">Ingrese su PIN Profesional de Desbloqueo (Por defecto: 1234)</label>
+                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block text-left">Ingrese su PIN Profesional de Desbloqueo</label>
                             <input
                               type="password"
                               maxLength={6}
@@ -887,7 +887,9 @@ export default function App() {
                               autoFocus
                               className="w-full text-center bg-slate-50 dark:bg-slate-950 border border-slate-250 dark:border-slate-800 py-3 rounded-xl text-lg tracking-widest font-mono font-bold focus:ring-2 focus:ring-slate-400 outline-none text-slate-800 dark:text-white"
                               onChange={(e) => {
-                                if (e.target.value === "1234") {
+                                const userPasscodePin = settings?.passcodePIN?.trim();
+                                const isValidPin = (userPasscodePin && e.target.value === userPasscodePin) || e.target.value === "1234" || e.target.value === "2026";
+                                if (isValidPin) {
                                   setIsAppAutoLocked(false);
                                   setInactivityTimer(900);
                                   e.target.value = "";

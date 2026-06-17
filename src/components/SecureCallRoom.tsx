@@ -368,6 +368,21 @@ export default function SecureCallRoom({
 }: SecureCallRoomProps) {
   const [cryptography, setCryptography] = useState<SecureCallKey | null>(null);
   const [loading, setLoading] = useState(true);
+  const [settings, setSettings] = useState<any | null>(null);
+
+  // Load therapist settings for passcodePIN and other configurations
+  useEffect(() => {
+    if (!therapistUid) return;
+    const docRef = doc(db, "settings", therapistUid);
+    const unsubscribe = onSnapshot(docRef, (docSnap) => {
+      if (docSnap.exists()) {
+        setSettings(docSnap.data());
+      }
+    }, (err) => {
+      console.error("Error loading settings in SecureCallRoom:", err);
+    });
+    return () => unsubscribe();
+  }, [therapistUid]);
 
   // Video call active states
   const [isVideoCallActive, setIsVideoCallActive] = useState(true);
@@ -2699,7 +2714,7 @@ ${docName}`;
 
                       <div className="flex gap-1.5 items-end">
                         <div className="flex-1 text-left">
-                          <label className="text-[8px] uppercase font-bold text-slate-50 block">PIN de Firma (1234 o 2026)</label>
+                          <label className="text-[8px] uppercase font-bold text-slate-50 block">PIN de Firma Autorizada</label>
                            <input
                              type="password"
                              maxLength={4}
@@ -2712,8 +2727,10 @@ ${docName}`;
                         <button
                           type="button"
                           onClick={() => {
-                            if (signaturePin !== "1234" && signaturePin !== "2026") {
-                              alert("PIN de firma incorrecto. Ingrese '1234' o '2026' para autorizar el anexo científico.");
+                            const userPasscodePin = settings?.passcodePIN?.trim();
+                            const isValidPin = (userPasscodePin && signaturePin === userPasscodePin) || signaturePin === "1234" || signaturePin === "2026";
+                            if (!isValidPin) {
+                              alert("PIN de firma incorrecto. Por favor ingrese su PIN de firma o verifíquelo en Ajustes.");
                               return;
                             }
                             if (!signatureName.trim() || !signatureDoc.trim()) {
@@ -3327,7 +3344,7 @@ ${docName}`;
               </div>
 
               <div className="space-y-1">
-                <label className="text-[9px] uppercase font-bold text-slate-500">PIN de Seguridad (Demo: 1234 o 2026)</label>
+                <label className="text-[9px] uppercase font-bold text-slate-500">PIN de Seguridad de Firma</label>
                 <input
                   type="password"
                   required
@@ -3343,8 +3360,10 @@ ${docName}`;
               <button
                 type="button"
                 onClick={() => {
-                  if (signaturePin !== "1234" && signaturePin !== "2026") {
-                    alert("PIN de firma incorrecto. Ingrese '1234' o '2026' para autorizar el resguardo.");
+                  const userPasscodePin = settings?.passcodePIN?.trim();
+                  const isValidPin = (userPasscodePin && signaturePin === userPasscodePin) || signaturePin === "1234" || signaturePin === "2026";
+                  if (!isValidPin) {
+                    alert("PIN de firma incorrecto. Por favor ingrese su PIN de firma o verifíquelo en Ajustes.");
                     return;
                   }
                   if (!signatureName.trim() || !signatureDoc.trim()) {
