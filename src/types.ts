@@ -96,6 +96,7 @@ export interface ClinicSettings {
   bankName?: string;
   passcode2FAEnabled?: boolean;
   passcodePIN?: string;
+  signaturePinHash?: string;
   isMaxSecurityEnforced?: boolean;
   flowSandboxMode?: boolean;
 }

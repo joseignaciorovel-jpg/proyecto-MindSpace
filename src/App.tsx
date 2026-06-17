@@ -886,9 +886,22 @@ export default function App() {
                               placeholder="••••"
                               autoFocus
                               className="w-full text-center bg-slate-50 dark:bg-slate-950 border border-slate-250 dark:border-slate-800 py-3 rounded-xl text-lg tracking-widest font-mono font-bold focus:ring-2 focus:ring-slate-400 outline-none text-slate-800 dark:text-white"
-                              onChange={(e) => {
+                              onChange={async (e) => {
+                                const inputVal = e.target.value;
+                                if (inputVal.length < 4) return;
+                                
+                                const msgBuffer = new TextEncoder().encode(inputVal.trim());
+                                const hashBuffer = await crypto.subtle.digest("SHA-256", msgBuffer);
+                                const hashArray = Array.from(new Uint8Array(hashBuffer));
+                                const inputHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+
                                 const userPasscodePin = settings?.passcodePIN?.trim();
-                                const isValidPin = (userPasscodePin && e.target.value === userPasscodePin) || e.target.value === "1234" || e.target.value === "2026";
+                                const hasHash = !!settings?.signaturePinHash;
+
+                                const isValidPin = hasHash
+                                  ? inputHash === settings.signaturePinHash
+                                  : (userPasscodePin ? inputVal.trim() === userPasscodePin : inputVal.trim() === "1234");
+
                                 if (isValidPin) {
                                   setIsAppAutoLocked(false);
                                   setInactivityTimer(900);

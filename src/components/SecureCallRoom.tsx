@@ -384,6 +384,22 @@ export default function SecureCallRoom({
     return () => unsubscribe();
   }, [therapistUid]);
 
+  const validatePin = async (inputPin: string): Promise<boolean> => {
+    if (!inputPin) return false;
+    const msgBuffer = new TextEncoder().encode(inputPin.trim());
+    const hashBuffer = await crypto.subtle.digest("SHA-256", msgBuffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const inputHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+
+    if (settings?.signaturePinHash) {
+      return inputHash === settings.signaturePinHash;
+    }
+    if (settings?.passcodePIN) {
+      return inputPin.trim() === settings.passcodePIN.trim();
+    }
+    return inputPin.trim() === "1234";
+  };
+
   // Video call active states
   const [isVideoCallActive, setIsVideoCallActive] = useState(true);
   const [cameraOn, setCameraOn] = useState(true);
@@ -2726,9 +2742,8 @@ ${docName}`;
                         </div>
                         <button
                           type="button"
-                          onClick={() => {
-                            const userPasscodePin = settings?.passcodePIN?.trim();
-                            const isValidPin = (userPasscodePin && signaturePin === userPasscodePin) || signaturePin === "1234" || signaturePin === "2026";
+                          onClick={async () => {
+                            const isValidPin = await validatePin(signaturePin);
                             if (!isValidPin) {
                               alert("PIN de firma incorrecto. Por favor ingrese su PIN de firma o verifíquelo en Ajustes.");
                               return;
@@ -3359,9 +3374,8 @@ ${docName}`;
             <div className="flex gap-2 pt-2.5">
               <button
                 type="button"
-                onClick={() => {
-                  const userPasscodePin = settings?.passcodePIN?.trim();
-                  const isValidPin = (userPasscodePin && signaturePin === userPasscodePin) || signaturePin === "1234" || signaturePin === "2026";
+                onClick={async () => {
+                  const isValidPin = await validatePin(signaturePin);
                   if (!isValidPin) {
                     alert("PIN de firma incorrecto. Por favor ingrese su PIN de firma o verifíquelo en Ajustes.");
                     return;

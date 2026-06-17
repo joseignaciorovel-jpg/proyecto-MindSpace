@@ -1264,14 +1264,29 @@ ${therapistName || "Psicólogo/a Tratante"}`;
     }
   };
 
+  const validatePin = async (inputPin: string): Promise<boolean> => {
+    if (!inputPin) return false;
+    const msgBuffer = new TextEncoder().encode(inputPin.trim());
+    const hashBuffer = await crypto.subtle.digest("SHA-256", msgBuffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const inputHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+
+    if (settings?.signaturePinHash) {
+      return inputHash === settings.signaturePinHash;
+    }
+    if (settings?.passcodePIN) {
+      return inputPin.trim() === settings.passcodePIN.trim();
+    }
+    return inputPin.trim() === "1234";
+  };
+
   const handleValidateAndSignSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!signatureName.trim() || !signatureDoc.trim()) {
       alert("Por favor ingrese su Nombre Completo y Registro de la Superintendencia (SIS).");
       return;
     }
-    const userPasscodePin = settings?.passcodePIN?.trim();
-    const isValidPin = (userPasscodePin && signaturePin === userPasscodePin) || signaturePin === "1234" || signaturePin === "2026";
+    const isValidPin = await validatePin(signaturePin);
     if (!isValidPin) {
       alert("PIN de firma digital incorrecto. Por favor verifique o actualice su PIN de firma en la sección de Ajustes.");
       return;

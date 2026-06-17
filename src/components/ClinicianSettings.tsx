@@ -255,12 +255,24 @@ export default function ClinicianSettings({ therapistUid, currentSettings, onSet
     setSpecialties(specialties.filter((s) => s !== itemToRemove));
   };
 
+  // Helper to hash the PIN before saving
+  const calculateSha256 = async (text: string) => {
+    if (!text) return "";
+    const msgBuffer = new TextEncoder().encode(text);
+    const hashBuffer = await crypto.subtle.digest("SHA-256", msgBuffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  };
+
   // Ultimate Save operation
   const handleSaveProfile = async () => {
     setIsSaving(true);
     setStatusMessage(null);
 
     const docId = therapistUid || "default_psychologist_uid_123";
+    const cleanPin = passcodePIN.trim();
+    const pinHash = await calculateSha256(cleanPin);
+
     const payload: ClinicSettings = {
       id: docId,
       therapistName: therapistName.trim() || "Ps. José Ignacio Rovel",
@@ -280,7 +292,8 @@ export default function ClinicianSettings({ therapistUid, currentSettings, onSet
       bankAccountMasked,
       bankName,
       passcode2FAEnabled,
-      passcodePIN: passcodePIN.trim(),
+      passcodePIN: cleanPin,
+      signaturePinHash: pinHash,
       isMaxSecurityEnforced,
       flowSandboxMode,
       updatedAt: Timestamp.now(),
