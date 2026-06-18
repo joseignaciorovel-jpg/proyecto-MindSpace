@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { onAuthStateChanged, signInWithPopup, signOut, User, GoogleAuthProvider } from "firebase/auth";
-import { collection, query, where, orderBy, onSnapshot, doc } from "firebase/firestore";
+import { collection, query, where, orderBy, onSnapshot, doc, getDocs, getDoc, setDoc, deleteDoc, writeBatch } from "firebase/firestore";
 import { auth, googleProvider, db } from "./firebase";
 import BookingCalendar from "./components/BookingCalendar";
 import ClinicalHistoryManager from "./components/ClinicalHistoryManager";
@@ -35,6 +35,19 @@ export default function App() {
   // Expose firestore db instance for custom developer migrations
   if (typeof window !== "undefined") {
     (window as any).firestoreDb = db;
+    (window as any).firestoreHelpers = {
+      collection,
+      query,
+      where,
+      orderBy,
+      onSnapshot,
+      doc,
+      getDocs,
+      getDoc,
+      setDoc,
+      deleteDoc,
+      writeBatch
+    };
   }
 
   const [user, setUser] = useState<User | null>(null);

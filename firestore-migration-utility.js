@@ -33,7 +33,11 @@ async function ejecutarLimpiezaTotalMindspace() {
     return;
   }
 
-  // Importar dinámicamente las herramientas oficiales de Firebase SDK cargadas en el cliente
+  const helpers = window.firestoreHelpers;
+  if (!helpers) {
+    console.error("%c❌ Error: No se encontraron las herramientas de Firestore en 'window.firestoreHelpers'. Asegúrese de que la página se haya cargado completamente.", "color: #ef4444; font-weight: bold;");
+    return;
+  }
   const { 
     collection, 
     getDocs, 
@@ -44,7 +48,7 @@ async function ejecutarLimpiezaTotalMindspace() {
     getDoc,
     setDoc,
     deleteDoc
-  } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
+  } = helpers;
 
   const OLD_UID = "default_psychologist_uid_123";
   const NEW_UID = "NDmjbTte6wa5vgeIc2JASOfNhYi1";

@@ -53,16 +53,25 @@ service cloud.firestore {
 
     // ─────────────────────────────────────────────────────────
     // APPOINTMENTS — agenda de citas
-    // El terapeuta dueño puede leer/editar/borrar todo.
-    // Un visitante NO autenticado puede CREAR una cita nueva
-    // (porque el paciente no tiene login), pero solo si:
-    //   - el documento que intenta crear declara un ownerId válido
-    //   - el estado inicial es "payment_pending" (no puede crear
-    //     una cita ya "completed" o "paid" directamente)
-    // No puede leer, modificar ni borrar citas existentes.
+    // El terapeuta dueño tiene privilegios totales. 
+    // Los pacientes anónimos pueden leer (para verificar disponibilidad de horario en el calendario público)
+    // y crear citas con estado inicial de pago pendiente.
+    // También se permite que el backend/cliente anónimo actualice datos de transacción de Flow.
     // ─────────────────────────────────────────────────────────
     match /appointments/{apptId} {
-      allow read, update, delete: if isOwner(resource.data.ownerId);
+      allow read: if true;
+      allow delete: if isOwner(resource.data.ownerId);
+
+      allow update: if isOwner(resource.data.ownerId) || 
+        (
+          resource.data.status == "payment_pending" &&
+          (
+            // Caso 1: Registrar el flowCommerceOrder en la creación del pago
+            (request.resource.data.flowCommerceOrder != null) ||
+            // Caso 2: Confirmación del pago desde Flow webhooks (pasa a scheduled y paid)
+            (request.resource.data.status == "scheduled" && request.resource.data.paymentStatus == "paid")
+          )
+        );
 
       allow create: if
         request.resource.data.ownerId is string &&
