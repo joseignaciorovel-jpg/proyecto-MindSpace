@@ -32,6 +32,11 @@ const formatReviewDate = (createdAt: any) => {
 };
 
 export default function App() {
+  // Expose firestore db instance for custom developer migrations
+  if (typeof window !== "undefined") {
+    (window as any).firestoreDb = db;
+  }
+
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -72,7 +77,7 @@ export default function App() {
   const [settings, setSettings] = useState<any | null>(null);
   const [therapistName, setTherapistName] = useState("Ps. José Ignacio Rovel");
   const [sessionPrice, setSessionPrice] = useState(45000);
-  const [therapistUid, setTherapistUid] = useState("default_psychologist_uid_123");
+  const [therapistUid, setTherapistUid] = useState("NDmjbTte6wa5vgeIc2JASOfNhYi1");
 
   // Session Auto-Lock system (Seguridad por Inactividad)
   const [inactivityTimer, setInactivityTimer] = useState<number>(900); // 15 minutes by default (900s)
@@ -167,31 +172,59 @@ export default function App() {
   // Listen for dynamic settings (profile, pricing, hours, channels)
   useEffect(() => {
     // We bind all clinic records to the logged-in user's UID.
-    // If not logged in, we set the helper fallback "default_psychologist_uid_123" so public guest sessions sync seamlessly.
-    const targetUid = user ? user.uid : "default_psychologist_uid_123";
+    // If not logged in, we set the helper fallback "NDmjbTte6wa5vgeIc2JASOfNhYi1" so public guest sessions sync seamlessly.
+    const targetUid = user ? user.uid : "NDmjbTte6wa5vgeIc2JASOfNhYi1";
     setTherapistUid(targetUid);
     
     const docRef = doc(db, "settings", targetUid);
-    const unsubscribe = onSnapshot(docRef, (docSnap) => {
+    const privateDocRef = doc(db, "settings", targetUid, "private", "secure");
+
+    let publicData: any = null;
+    let privateData: any = null;
+
+    const handleMergeAndSet = () => {
+      const merged = { ...publicData, ...privateData };
+      setSettings(merged);
+      if (publicData?.therapistName) setTherapistName(publicData.therapistName);
+      if (publicData?.sessionPrice) setSessionPrice(publicData.sessionPrice);
+    };
+
+    const unsubPublic = onSnapshot(docRef, (docSnap) => {
       if (docSnap.exists()) {
-        const data = docSnap.data();
-        setSettings(data);
-        if (data.therapistName) setTherapistName(data.therapistName);
-        if (data.sessionPrice) setSessionPrice(data.sessionPrice);
+        publicData = docSnap.data();
       } else {
-        setSettings(null);
-        if (user) {
-          setTherapistName(user.displayName || "Ps. José Ignacio Rovel");
-        } else {
-          setTherapistName("Ps. José Ignacio Rovel");
-        }
-        setSessionPrice(45000);
+        publicData = {
+          therapistName: user ? (user.displayName || "Ps. José Ignacio Rovel") : "Ps. José Ignacio Rovel",
+          sessionPrice: 45000
+        };
       }
+      handleMergeAndSet();
     }, (error) => {
-      console.warn("Could not load dynamic settings: ", error.message);
+      console.warn("Could not load dynamic public settings: ", error.message);
     });
 
-    return () => unsubscribe();
+    let unsubPrivate = () => {};
+    // Only subscribe to private securely stored settings if there is a logged-in user
+    if (user) {
+      unsubPrivate = onSnapshot(privateDocRef, (docSnap) => {
+        if (docSnap.exists()) {
+          privateData = docSnap.data();
+        } else {
+          privateData = null;
+        }
+        handleMergeAndSet();
+      }, (error) => {
+        console.warn("Could not load secure settings: ", error.message);
+      });
+    } else {
+      privateData = null;
+      handleMergeAndSet();
+    }
+
+    return () => {
+      unsubPublic();
+      unsubPrivate();
+    };
   }, [user]);
 
   // Monitor activity and auto-lock after 15 minutes of inactivity in Dashboard
@@ -752,7 +785,7 @@ export default function App() {
                     userEmailNormal === "p.joseignacio@gmail.com" || 
                     userEmailNormal === "jose.ignacio.therapist@gmail.com" ||
                     userEmailNormal === "joseignacio.rovel@gmail.com" ||
-                    user.uid === "default_psychologist_uid_123" ||
+                    user.uid === "NDmjbTte6wa5vgeIc2JASOfNhYi1" ||
                     !settings ||
                     (settings.contactEmail && settings.contactEmail.toLowerCase().trim() === userEmailNormal) ||
                     settings.ownerId === user.uid

@@ -26,14 +26,41 @@ export default function ClinicalHistoryManager({ therapistUid, therapistName }: 
   useEffect(() => {
     if (!therapistUid) return;
     const docRef = doc(db, "settings", therapistUid);
-    const unsubscribe = onSnapshot(docRef, (docSnap) => {
+    const privateDocRef = doc(db, "settings", therapistUid, "private", "secure");
+
+    let publicData: any = null;
+    let privateData: any = null;
+
+    const handleMergeAndSet = () => {
+      setSettings({ ...publicData, ...privateData });
+    };
+
+    const unsubPublic = onSnapshot(docRef, (docSnap) => {
       if (docSnap.exists()) {
-        setSettings(docSnap.data());
+        publicData = docSnap.data();
+      } else {
+        publicData = null;
       }
+      handleMergeAndSet();
     }, (err) => {
       console.error("Error loading settings in ClinicalHistoryManager:", err);
     });
-    return () => unsubscribe();
+
+    const unsubPrivate = onSnapshot(privateDocRef, (docSnap) => {
+      if (docSnap.exists()) {
+        privateData = docSnap.data();
+      } else {
+        privateData = null;
+      }
+      handleMergeAndSet();
+    }, (err) => {
+      console.warn("Could not load private secure settings in ClinicalHistoryManager:", err.message);
+    });
+
+    return () => {
+      unsubPublic();
+      unsubPrivate();
+    };
   }, [therapistUid]);
 
   // Load reviews for ownerId

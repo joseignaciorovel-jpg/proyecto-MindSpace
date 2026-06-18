@@ -103,7 +103,7 @@ export function InteractiveFeedbackCard({
         consentLawAccepted: Boolean(consentLawAccepted),
         publicConsent: Boolean(publicConsent),
         isAnonymized: Boolean(isAnonymized),
-        ownerId: therapistId || "default_psychologist_uid_123",
+        ownerId: therapistId || "NDmjbTte6wa5vgeIc2JASOfNhYi1",
         tags: selectedTags, // Save our pills!
         createdAt: Timestamp.now()
       };
@@ -374,15 +374,45 @@ export default function SecureCallRoom({
   useEffect(() => {
     if (!therapistUid) return;
     const docRef = doc(db, "settings", therapistUid);
-    const unsubscribe = onSnapshot(docRef, (docSnap) => {
+    const privateDocRef = doc(db, "settings", therapistUid, "private", "secure");
+
+    let publicData: any = null;
+    let privateData: any = null;
+
+    const handleMergeAndSet = () => {
+      setSettings({ ...publicData, ...privateData });
+    };
+
+    const unsubPublic = onSnapshot(docRef, (docSnap) => {
       if (docSnap.exists()) {
-        setSettings(docSnap.data());
+        publicData = docSnap.data();
+      } else {
+        publicData = null;
       }
+      handleMergeAndSet();
     }, (err) => {
       console.error("Error loading settings in SecureCallRoom:", err);
     });
-    return () => unsubscribe();
-  }, [therapistUid]);
+
+    let unsubPrivate = () => {};
+    if (isClinician) {
+      unsubPrivate = onSnapshot(privateDocRef, (docSnap) => {
+        if (docSnap.exists()) {
+          privateData = docSnap.data();
+        } else {
+          privateData = null;
+        }
+        handleMergeAndSet();
+      }, (err) => {
+        console.warn("Could not load private secure settings in SecureCallRoom:", err.message);
+      });
+    }
+
+    return () => {
+      unsubPublic();
+      unsubPrivate();
+    };
+  }, [therapistUid, isClinician]);
 
   const validatePin = async (inputPin: string): Promise<boolean> => {
     if (!inputPin) return false;
@@ -861,7 +891,7 @@ export default function SecureCallRoom({
   // Fetch patients lists on mount for clinical search dropdown
   useEffect(() => {
     if (isClinician) {
-      const ownerId = therapistUid || auth.currentUser?.uid || "default_psychologist_uid_123";
+      const ownerId = therapistUid || auth.currentUser?.uid || "NDmjbTte6wa5vgeIc2JASOfNhYi1";
       const q = query(
         collection(db, "patients"),
         where("ownerId", "==", ownerId)
@@ -1361,7 +1391,7 @@ ${docName}`;
         observations: `Emisión de documento: ${reportDocTitle}`,
         aiSummary: "Ficha oficial generada e impresa en la ventana de consulta clínica.",
         createdAt: Timestamp.now(),
-        ownerId: therapistUid || "default_psychologist_uid_123"
+        ownerId: therapistUid || "NDmjbTte6wa5vgeIc2JASOfNhYi1"
       };
 
       const { doc, setDoc } = await import("firebase/firestore");
@@ -1444,7 +1474,7 @@ ${docName}`;
         observations: combinedDiagnostics || "Estable",
         aiSummary: aiSummaryResult || "Resumen de evolución clínica no generado en llamada.",
         createdAt: Timestamp.now(),
-        ownerId: therapistUid || "default_psychologist_uid_123",
+        ownerId: therapistUid || "NDmjbTte6wa5vgeIc2JASOfNhYi1",
         isSigned: isSigned,
         ...(isSigned && sigName && sigDoc ? {
           signatureDate: new Date().toLocaleDateString("es-CL"),
@@ -3217,7 +3247,7 @@ ${docName}`;
                       <InteractiveFeedbackCard
                         msg={msg}
                         idx={idx}
-                        therapistId={therapistUid || "default_psychologist_uid_123"}
+                        therapistId={therapistUid || "NDmjbTte6wa5vgeIc2JASOfNhYi1"}
                         therapistName={therapistName || "Terapeuta"}
                         defaultPatientName={patientName || "Paciente Atendido"}
                         onUpdateFeedback={(msgIdx, feedback) => {

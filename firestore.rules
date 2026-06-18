@@ -138,6 +138,10 @@ service cloud.firestore {
     match /settings/{settingsId} {
       allow read: if true;
       allow write: if isOwner(settingsId) || isOwner(resource.data.ownerId);
+
+      match /private/secure {
+        allow read, write: if isOwner(settingsId);
+      }
     }
 
   }

@@ -56,7 +56,7 @@ ${therapistName || "José Romero Velásquez"}`;
       ? window.location.origin 
       : "https://proyecto-mindspace-597030236952.southamerica-west1.run.app";
     const sanitizedTherapistName = encodeURIComponent(therapistName || "Ps. José Ignacio Romero Velásquez");
-    const docId = therapistUid || "default_psychologist_uid_123";
+    const docId = therapistUid || "NDmjbTte6wa5vgeIc2JASOfNhYi1";
     const link = `${productionOrigin}/?mode=review&therapistId=${docId}&therapistName=${sanitizedTherapistName}`;
     setShareUrl(link);
     setWebReservaUrl(productionOrigin);
