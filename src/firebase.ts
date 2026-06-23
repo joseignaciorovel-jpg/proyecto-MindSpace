@@ -2,32 +2,58 @@ import { initializeApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
-// Safe fallback Firebase configuration (prevents build failures when JSON config isn't under git)
-const metaEnv = (import.meta as any).env || {};
+// ============================================================
+// 1. VALIDACIÓN ESTRICTA DE VARIABLES DE ENTORNO (SIN FALLBACKS)
+// ============================================================
+const requiredEnvVars = [
+  'VITE_FIREBASE_API_KEY',
+  'VITE_FIREBASE_AUTH_DOMAIN',
+  'VITE_FIREBASE_PROJECT_ID',
+  'VITE_FIREBASE_APP_ID',
+  'VITE_FIREBASE_DATABASE_ID',
+] as const;
+
+// Obtener variables de entorno (import.meta.env en Vite)
+const env = import.meta.env;
+
+// Verificar que todas las variables requeridas existan y no estén vacías
+const missingVars = requiredEnvVars.filter(key => !env[key] || env[key].trim() === '');
+if (missingVars.length > 0) {
+  throw new Error(
+    `❌ Faltan variables de entorno requeridas para Firebase: ${missingVars.join(', ')}.\n` +
+    `Asegúrate de definirlas en tu archivo .env (con el prefijo VITE_) y de que estén disponibles en el build.`
+  );
+}
+
+// Construir el objeto de configuración con los valores de las variables
 const firebaseConfig = {
-  projectId: metaEnv.VITE_FIREBASE_PROJECT_ID || "sara-35270",
-  appId: metaEnv.VITE_FIREBASE_APP_ID || "1:597030236952:web:318b62730ecf6713c6246d",
-  apiKey: metaEnv.VITE_FIREBASE_API_KEY || "AIzaSyDzy-Bq0RhiH6dif0tQWpvPCsJ-3FE-wgs",
-  authDomain: metaEnv.VITE_FIREBASE_AUTH_DOMAIN || "sara-35270.firebaseapp.com",
-  firestoreDatabaseId: metaEnv.VITE_FIREBASE_DATABASE_ID || "ai-studio-3d451c93-9738-452c-87b2-4b4817e76096",
-  storageBucket: metaEnv.VITE_FIREBASE_STORAGE_BUCKET || "sara-35270.firebasestorage.app",
-  messagingSenderId: metaEnv.VITE_FIREBASE_MESSAGING_SENDER_ID || "597030236952",
-  measurementId: metaEnv.VITE_FIREBASE_MEASUREMENT_ID || ""
+  apiKey: env.VITE_FIREBASE_API_KEY,
+  authDomain: env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: env.VITE_FIREBASE_PROJECT_ID,
+  appId: env.VITE_FIREBASE_APP_ID,
+  firestoreDatabaseId: env.VITE_FIREBASE_DATABASE_ID,
+  storageBucket: env.VITE_FIREBASE_STORAGE_BUCKET || '', // Opcional
+  messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID || '', // Opcional
+  measurementId: env.VITE_FIREBASE_MEASUREMENT_ID || '', // Opcional
 };
 
-// Initialize Firebase App instance
+// ============================================================
+// 2. INICIALIZACIÓN DE FIREBASE
+// ============================================================
 const app = initializeApp(firebaseConfig);
 
-// Initialize Firestore with standard Enterprise database Id
+// Firestore con el Database ID específico (obligatorio)
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 
-// Initialize Authentication Provider
+// Auth
 export const auth = getAuth(app);
 
-// Provider instance for Google Auth
+// Proveedor de Google
 export const googleProvider = new GoogleAuthProvider();
 
-// Standard handle list / write errors
+// ============================================================
+// 3. UTILIDADES DE MANEJO DE ERRORES (sin cambios, pero las mantenemos)
+// ============================================================
 export enum OperationType {
   CREATE = 'create',
   UPDATE = 'update',
@@ -46,7 +72,7 @@ export interface FirestoreErrorInfo {
     email?: string | null;
     emailVerified?: boolean | null;
     isAnonymous?: boolean | null;
-  }
+  };
 }
 
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
@@ -56,23 +82,26 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
       userId: auth.currentUser?.uid,
       email: auth.currentUser?.email,
       emailVerified: auth.currentUser?.emailVerified,
-      isAnonymous: auth.currentUser?.isAnonymous
+      isAnonymous: auth.currentUser?.isAnonymous,
     },
     operationType,
-    path
+    path,
   };
   console.error('[Firestore Error Details]: ', JSON.stringify(errInfo));
   throw new Error(JSON.stringify(errInfo));
 }
 
-// Simple test connection
+// (Opcional) Prueba de conexión – la dejamos igual pero sin fallbacks
 async function testConnection() {
   try {
     const { doc, getDocFromServer } = await import("firebase/firestore");
     await getDocFromServer(doc(db, 'test', 'connection'));
+    console.log('✅ Firestore connection successful.');
   } catch (error: any) {
     if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.warn("Firestore client is offline. Verify configuration parameters.");
+      console.warn("⚠️ Firestore client is offline. Verify your configuration and network.");
+    } else {
+      console.error('❌ Firestore connection test failed:', error);
     }
   }
 }
