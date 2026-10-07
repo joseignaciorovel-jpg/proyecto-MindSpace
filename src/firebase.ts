@@ -76,21 +76,25 @@ export interface FirestoreErrorInfo {
 }
 
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
-  const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
-    authInfo: {
-      userId: auth.currentUser?.uid,
-      email: auth.currentUser?.email,
-      emailVerified: auth.currentUser?.emailVerified,
-      isAnonymous: auth.currentUser?.isAnonymous,
-    },
-    operationType,
-    path,
-  };
-  console.error('[Firestore Error Details]: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
-}
+  const errorCode =
+    typeof error === "object" && error !== null && "code" in error
+      ? String((error as { code?: unknown }).code || "unknown")
+      : "unknown";
+  const collectionName = path?.split("/").filter(Boolean)[0] || null;
 
+  // No registrar correo, UID, ruta completa ni mensaje del SDK: pueden incluir
+  // identificadores personales o de documentos clínicos.
+  console.error("[Firestore operation failed]", {
+    errorCode,
+    operationType,
+    collection: collectionName,
+    authenticated: Boolean(auth.currentUser),
+  });
+
+  throw new Error(
+    `No se pudo completar ${operationType} en ${collectionName || "Firestore"} (${errorCode}).`
+  );
+}
 // (Opcional) Prueba de conexión – la dejamos igual pero sin fallbacks
 async function testConnection() {
   try {
