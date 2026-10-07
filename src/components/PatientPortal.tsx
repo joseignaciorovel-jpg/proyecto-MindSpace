@@ -460,54 +460,19 @@ export default function PatientPortal({ therapistUid, therapistName, sessionPric
     }
   };
 
-  // Checks for credential cache and URL query parameter pre-population
+  // Elimina credenciales que la versión anterior guardaba en el navegador.
+  // RUT y correo no prueban identidad y no deben persistirse como sesión.
   useEffect(() => {
-    // 1. First, check URL parameters for pre-filling / smart auto-login
-    const params = new URLSearchParams(window.location.search);
-    const rutParam = params.get("rut");
-    const emailParam = params.get("email");
-
-    if (rutParam || emailParam) {
-      const cleanRut = (rutParam || "").trim();
-      const cleanEmail = (emailParam || "").trim();
-      
-      if (cleanRut) setPatientRut(cleanRut);
-      if (cleanEmail) setPatientEmail(cleanEmail);
-
-      if (cleanRut && cleanEmail) {
-        localStorage.setItem(
-          "mindspace_patient_credentials",
-          JSON.stringify({
-            rut: cleanRut.toLowerCase(),
-            email: cleanEmail.toLowerCase(),
-          })
-        );
-        setHasAccess(true);
-
-        // Clean query parameters from URL for a sleek, secure browser history
-        try {
-          const nextUrl = window.location.pathname + "?portal=patient";
-          window.history.replaceState({}, document.title, nextUrl);
-        } catch (e) {
-          console.warn("Unable to rewrite state URL cleanly:", e);
-        }
-        return;
+    try {
+      localStorage.removeItem("mindspace_patient_credentials");
+      const url = new URL(window.location.href);
+      if (url.searchParams.has("rut") || url.searchParams.has("email")) {
+        url.searchParams.delete("rut");
+        url.searchParams.delete("email");
+        window.history.replaceState({}, document.title, url.pathname + url.search + url.hash);
       }
-    }
-
-    // 2. Fallback to localStorage cache
-    const cached = localStorage.getItem("mindspace_patient_credentials");
-    if (cached) {
-      try {
-        const { rut, email } = JSON.parse(cached);
-        if (rut && email) {
-          setPatientRut(rut);
-          setPatientEmail(email);
-          setHasAccess(true);
-        }
-      } catch (err) {
-        // stale cache
-      }
+    } catch (error) {
+      console.warn("No se pudo limpiar la sesión local anterior.");
     }
   }, []);
 
@@ -1068,6 +1033,28 @@ export default function PatientPortal({ therapistUid, therapistName, sessionPric
     );
   };
 
+  return (
+    <section className="w-full max-w-2xl mx-auto my-8 rounded-2xl border border-amber-300 bg-amber-50 p-6 text-slate-900 shadow-sm" role="alert">
+      <div className="flex items-start gap-3">
+        <ShieldAlert className="mt-1 h-6 w-6 shrink-0 text-amber-700" aria-hidden="true" />
+        <div className="space-y-3">
+          <h2 className="text-lg font-bold">Portal de pacientes temporalmente fuera de servicio</h2>
+          <p>
+            Estamos actualizando la verificación de identidad y la protección de datos.
+            El RUT y el correo no bastan para confirmar quién accede a una ficha clínica.
+          </p>
+          <p>
+            Por ahora no ingreses información de salud ni uses este portal para consultar,
+            reservar o modificar una cita. Contacta directamente al consultorio para recibir
+            asistencia y confirmar tus horas.
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+
+  // Se conserva el flujo antiguo solo como referencia de migración. No se renderiza
+  // hasta sustituirlo por autenticación individual y autorización en servidor.
   return (
     <div className="w-full md:max-w-4xl md:mx-auto py-0 md:py-1 animate-in fade-in duration-300">
       
