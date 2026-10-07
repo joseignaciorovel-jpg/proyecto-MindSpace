@@ -27,7 +27,7 @@ jobs:
           cache: npm
 
       - name: Resolve dependency lockfile
-        run: npm install --package-lock-only
+        run: npm update --package-lock-only
 
       - name: Install locked dependencies
         run: npm ci
