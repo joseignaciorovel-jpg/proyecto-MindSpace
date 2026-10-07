@@ -32,24 +32,6 @@ const formatReviewDate = (createdAt: any) => {
 };
 
 export default function App() {
-  // Expose firestore db instance for custom developer migrations
-  if (typeof window !== "undefined") {
-    (window as any).firestoreDb = db;
-    (window as any).firestoreHelpers = {
-      collection,
-      query,
-      where,
-      orderBy,
-      onSnapshot,
-      doc,
-      getDocs,
-      getDoc,
-      setDoc,
-      deleteDoc,
-      writeBatch
-    };
-  }
-
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
