@@ -29,6 +29,11 @@ jobs:
       - name: Install locked dependencies
         run: npm ci
 
+      - name: Summarize dependency advisories
+        run: |
+          npm audit --json > audit.json || true
+          node -e 'const a=require("./audit.json"); for (const [name, v] of Object.entries(a.vulnerabilities || {})) console.log(JSON.stringify({package:name,severity:v.severity,direct:v.isDirect,range:v.range,fixAvailable:v.fixAvailable,via:v.via.map(x=>typeof x==="string"?x:{name:x.name,title:x.title,url:x.url,range:x.range})}));'
+
       - name: Type check
         run: npm run lint
 
