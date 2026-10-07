@@ -118,7 +118,7 @@ function scheduleTokenRefresh(): void {
   const refreshTime = Math.max(0, remaining - 5 * 60 * 1000);
   console.log(`[Google Auth] Token expirará en ${Math.round(remaining / 1000)}s. Renovación programada en ${Math.round(refreshTime / 1000)}s.`);
 
-  tokenExpiryTimer = setTimeout(async () => {
+  tokenExpiryTimer = window.setTimeout(async () => {
     console.log("[Google Auth] Intentando renovar token automáticamente...");
     try {
       const newToken = await refreshGoogleToken();
