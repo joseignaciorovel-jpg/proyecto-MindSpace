@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { after, afterEach, before, test } from "node:test";
+import { fileURLToPath } from "node:url";
+import { dirname, resolve } from "node:path";
 import { doc, getDoc, setDoc, updateDoc, deleteDoc } from "firebase/firestore";
 import {
   assertFails,
@@ -9,13 +11,16 @@ import {
 } from "@firebase/rules-unit-testing";
 
 const projectId = "demo-mindspace";
+const rulesPath = resolve(dirname(fileURLToPath(import.meta.url)), "../../firestore.rules");
 let testEnv;
 
 before(async () => {
   testEnv = await initializeTestEnvironment({
     projectId,
     firestore: {
-      rules: readFileSync("firestore.rules", "utf8"),
+      host: "127.0.0.1",
+      port: 8080,
+      rules: readFileSync(rulesPath, "utf8"),
     },
   });
 });
