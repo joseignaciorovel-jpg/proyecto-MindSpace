@@ -10,6 +10,12 @@ Estado al 7 de octubre de 2026. Esta rama es una etapa de contención y migraci�
 - El servidor limita el cuerpo JSON/URL-encoded y deja disponible únicamente `GET /api/health`. Las demás rutas API responden 503 durante la migración.
 - La edición de reseñas conserva la propiedad original y la eliminación valida el documento existente.
 
+## Validación de esta rama
+
+El 7 de octubre de 2026, GitHub Actions ejecutó correctamente `npm ci`, `npm audit` (0 vulnerabilidades según el advisory feed de esa fecha), `npm run lint`, `npm run build`, construcción de la imagen Docker y una prueba de humo en Node 24 que confirma que `/api/health` responde 200 y una API heredada responde 503.
+
+Aún **no** se han probado las reglas de Firestore en Emulator ni se han probado operaciones contra una base de datos aislada. La privacidad, las copias/restauración, la autenticación y los flujos clínicos tampoco están validados. El resultado de CI solo demuestra que esta etapa compila, construye y mantiene cerradas las APIs heredadas.
+
 ## Funciones que siguen bloqueadas
 
 La pausa de API deja temporalmente fuera de servicio reservas y cambios de citas, cobros Flow, recibos, IA/Gemini, firma de llamadas y pagos simulados. No usar la interfaz actual para atender pacientes, registrar evoluciones, cobrar ni gestionar urgencias. El bloqueo es intencional: las rutas antiguas no verifican de forma suficiente identidad, permisos, estado de pago o integridad de los datos.
