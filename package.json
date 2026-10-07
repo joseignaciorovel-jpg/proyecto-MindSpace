@@ -9,7 +9,8 @@
     "start": "node dist/server.cjs",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "test:rules": "firebase emulators:exec --only firestore --project demo-mindspace \"node --test tests/firestore.rules.test.js\""
   },
   "dependencies": {
     "@google-cloud/firestore": "^7.0.0",
@@ -34,7 +35,9 @@
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",
-    "vite": "^6.2.3"
+    "vite": "^6.2.3",
+    "@firebase/rules-unit-testing": "^4.0.1",
+    "firebase-tools": "^15.19.0"
   },
   "overrides": {
     "@grpc/grpc-js": "^1.14.5",
