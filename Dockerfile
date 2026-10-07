@@ -1,5 +1,5 @@
 # Stage 1: Build the application assets and compiled CJS server
-FROM node:20-alpine AS builder
+FROM node:24-alpine AS builder
 
 WORKDIR /app
 
@@ -27,7 +27,7 @@ ARG VITE_FIREBASE_MEASUREMENT_ID
 RUN npm run build
 
 # Stage 2: Production runtime stage
-FROM node:20-alpine AS runner
+FROM node:24-alpine AS runner
 
 WORKDIR /app
 
