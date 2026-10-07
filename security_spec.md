@@ -1,3 +1,5 @@
+> **Aviso de estado:** este documento es un borrador heredado, aspiracional y no demuestra que los controles descritos estén implementados. Incluye una política antigua de citas públicas que ya no debe considerarse válida. Consulta [SECURITY_RECOVERY.md](SECURITY_RECOVERY.md) para el estado actual y los hitos. La revisión jurídica debe determinar los marcos aplicables a Chile; las referencias HIPAA de este archivo no implican que HIPAA aplique al proyecto.
+
 # Security Specifications: Clinical Psychology Practice Backend
 
 ## 1. Data Invariants & Access Control Matrices

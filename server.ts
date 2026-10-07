@@ -10,15 +10,7 @@ import { z } from "zod";
 // Load environment variables
 dotenv.config();
 
-// === DIAGNÓSTICO DE ARRANQUE ===
-const _diagFlowKey = (process.env.FLOW_API_KEY || "").trim();
-const _diagFlowSecret = (process.env.FLOW_SECRET_KEY || "").trim();
-console.log("=== DIAGNÓSTICO DE VARIABLES DE ENTORNO AL ARRANQUE ===");
-console.log(`FLOW_API_KEY: largo=${_diagFlowKey.length}, vacío=${_diagFlowKey.length === 0}, primeros4="${_diagFlowKey.substring(0, Math.min(4, _diagFlowKey.length))}"`);
-console.log(`FLOW_SECRET_KEY: largo=${_diagFlowSecret.length}, vacío=${_diagFlowSecret.length === 0}`);
-console.log(`NODE_ENV: ${process.env.NODE_ENV}`);
-console.log("=======================================================");
-
+// Nunca registrar fragmentos, longitudes ni valores de secretos.
 // ================================================================
 // 1. INICIALIZACIÓN DE FIRESTORE (SDK OFICIAL)
 // ================================================================
@@ -192,8 +184,24 @@ function hasRealFlowCredentials(): boolean {
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: "1mb" }));
+app.use(express.urlencoded({ extended: true, limit: "1mb" }));
+
+// Bloqueo temporal de APIs heredadas mientras se migran a autenticación,
+// autorización por paciente, validación de pagos y minimización de datos.
+// La interfaz estática puede revisarse, pero no debe operar con datos clínicos
+// ni cobros hasta que cada ruta tenga controles y pruebas propios.
+app.get("/api/health", (_req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  return res.status(200).json({ status: "ok" });
+});
+app.use("/api", (_req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  return res.status(503).json({
+    error: "API temporalmente deshabilitada durante la migración de seguridad.",
+    code: "SECURITY_MIGRATION_IN_PROGRESS",
+  });
+});
 
 // ================================================================
 // 6. ENDPOINTS DE FLOW (con validación Zod)
@@ -217,18 +225,7 @@ app.post("/api/flow/create-payment", async (req, res) => {
   const flowApiUrl = await getFlowApiUrlResolved(useSandbox);
   const numAmount = price;
 
-  const hostHeader = req.get('host') || req.headers.host || "";
-  const isDevLocal = hostHeader.includes("localhost") || hostHeader.includes("127.0.0.1") || hostHeader.includes("ais-dev-") || hostHeader.includes("ais-pre-");
-
-  console.log("=================== [Flow Payment Verbose Diagnostic] ===================");
-  console.log(`- Request Host Header: "${hostHeader}"`);
-  console.log(`- Detected isDevLocal: ${isDevLocal}`);
-  console.log(`- Client body 'useSandbox': ${useSandbox}`);
-  console.log(`- FLOW_API_KEY exists: ${!!flowApiKey} (Length: ${flowApiKey.length})`);
-  console.log(`- FLOW_SECRET_KEY exists: ${!!flowSecretKey} (Length: ${flowSecretKey.length})`);
-  console.log(`- hasRealFlowCredentials(): ${hasRealFlowCredentials()}`);
-  console.log(`- Target Flow URL: "${flowApiUrl}/payment/create"`);
-  console.log("========================================================================");
+  console.log("[Flow] Solicitud de pago recibida.");
 
   if (!hasRealFlowCredentials()) {
     return res.status(400).json({
@@ -301,7 +298,7 @@ app.post("/api/flow/create-payment", async (req, res) => {
     }
 
     const flowResult = (await response.json()) as { url: string; token: string; flowOrder: number };
-    console.log("[Flow Real API] Link de pago creado exitosamente:", flowResult);
+    console.log("[Flow Real API] Link de pago creado.");
 
     return res.json({
       success: true,
@@ -791,25 +788,7 @@ function getGeminiClient(): GoogleGenAI {
   return aiClient;
 }
 
-// REST APIs
-app.get("/api/env-check", (req, res) => {
-  const k = (process.env.FLOW_API_KEY || "").trim();
-  const s = (process.env.FLOW_SECRET_KEY || "").trim();
-  res.json({
-    flow_api_key_largo: k.length,
-    flow_api_key_preview: k.length > 0 ? `${k.substring(0, Math.min(4, k.length))}...${k.substring(Math.max(0, k.length - 3))}` : "VACÍO ❌",
-    flow_secret_key_largo: s.length,
-    flow_secret_key_preview: s.length > 0 ? `${s.substring(0, Math.min(4, s.length))}...${s.substring(Math.max(0, s.length - 3))}` : "VACÍO ❌",
-    has_real_credentials: hasRealFlowCredentials(),
-    flow_api_url: process.env.FLOW_API_URL || "no configurada",
-    node_env: process.env.NODE_ENV,
-  });
-});
-
-app.get("/api/health", (req, res) => {
-  res.json({ status: "healthy", timestamp: new Date().toISOString() });
-});
-
+// Legacy routes below are blocked by the migration guard until replaced.
 // ElevenLabs status check
 app.get("/api/elevenlabs/status", (req, res) => {
   const apiKey = process.env.ELEVENLABS_API_KEY;

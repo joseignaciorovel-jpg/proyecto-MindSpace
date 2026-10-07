@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from "react";
-import { onAuthStateChanged, signInWithPopup, signOut, User, GoogleAuthProvider } from "firebase/auth";
+import { onAuthStateChanged, signInWithPopup, signOut, User } from "firebase/auth";
 import { collection, query, where, orderBy, onSnapshot, doc, getDocs, getDoc, setDoc, deleteDoc, writeBatch } from "firebase/firestore";
 import { auth, googleProvider, db } from "./firebase";
-import BookingCalendar from "./components/BookingCalendar";
+import { clearCachedAccessToken } from "./utils/googleAuth";
 import ClinicalHistoryManager from "./components/ClinicalHistoryManager";
 import ClinicianAgenda from "./components/ClinicianAgenda";
 import PaymentsLedger from "./components/PaymentsLedger";
@@ -18,7 +18,7 @@ import { TermsOfServiceModal, PrivacyPolicyModal } from "./components/LegalModal
 import { soundFX } from "./utils/soundFX";
 import { motion, AnimatePresence } from "motion/react";
 import { Calendar, BookOpen, CreditCard, LogIn, LogOut, Video, Heart, Globe, Settings, Lock, Sparkles, MessageSquare, ShieldCheck, Clipboard, Star, Share2, ChevronLeft, ChevronRight, Sun, Moon, Phone, Smile, ShieldAlert, Activity, Clock, ChevronDown, Volume2, VolumeX } from "lucide-react";
-import { setCachedAccessToken } from "./utils/googleAuth";
+const AUTHORIZED_CLINICIAN_UID = "NDmjbTte6wa5vgeIc2JASOfNhYi1";
 
 const formatReviewDate = (createdAt: any) => {
   if (!createdAt) return "Reciente";
@@ -32,24 +32,6 @@ const formatReviewDate = (createdAt: any) => {
 };
 
 export default function App() {
-  // Expose firestore db instance for custom developer migrations
-  if (typeof window !== "undefined") {
-    (window as any).firestoreDb = db;
-    (window as any).firestoreHelpers = {
-      collection,
-      query,
-      where,
-      orderBy,
-      onSnapshot,
-      doc,
-      getDocs,
-      getDoc,
-      setDoc,
-      deleteDoc,
-      writeBatch
-    };
-  }
-
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -184,9 +166,15 @@ export default function App() {
 
   // Listen for dynamic settings (profile, pricing, hours, channels)
   useEffect(() => {
-    // We bind all clinic records to the logged-in user's UID.
-    // If not logged in, we set the helper fallback "NDmjbTte6wa5vgeIc2JASOfNhYi1" so public guest sessions sync seamlessly.
-    const targetUid = user ? user.uid : "NDmjbTte6wa5vgeIc2JASOfNhYi1";
+    // Solo el profesional provisionado obtiene suscripciones a datos de consultorio.
+    // Las cuentas nuevas no pueden autoasignarse acceso clínico.
+    if (!user || !user.emailVerified || user.uid !== AUTHORIZED_CLINICIAN_UID) {
+      setTherapistUid("");
+      setSettings(null);
+      return;
+    }
+
+    const targetUid = user.uid;
     setTherapistUid(targetUid);
     
     const docRef = doc(db, "settings", targetUid);
@@ -213,7 +201,7 @@ export default function App() {
       }
       handleMergeAndSet();
     }, (error) => {
-      console.warn("Could not load dynamic public settings: ", error.message);
+      console.warn("Could not load dynamic public settings.", error.code || "unknown");
     });
 
     let unsubPrivate = () => {};
@@ -227,11 +215,8 @@ export default function App() {
         }
         handleMergeAndSet();
       }, (error) => {
-        console.warn("Could not load secure settings: ", error.message);
+        console.warn("Could not load secure settings.", error.code || "unknown");
       });
-    } else {
-      privateData = null;
-      handleMergeAndSet();
     }
 
     return () => {
@@ -283,17 +268,7 @@ export default function App() {
   const handleLoginGoogle = async () => {
     setAuthError(null);
     try {
-      // Configure scopes for Gmail sending support
-      googleProvider.addScope("https://www.googleapis.com/auth/gmail.send");
-      
-      const result = await signInWithPopup(auth, googleProvider);
-      const credential = GoogleAuthProvider.credentialFromResult(result);
-      if (credential?.accessToken) {
-        setCachedAccessToken(credential.accessToken);
-        console.log("[Google Auth]: Token retrieved and cached successfully.");
-      } else {
-        console.warn("[Google Auth]: No access token returned in the credential payload.");
-      }
+      await signInWithPopup(auth, googleProvider);
     } catch (err: any) {
       console.error("Specialist Google Authentication error:", err);
       let errorMsg = "Hubo un problema al ingresar con Google. Por favor, intente de nuevo.";
@@ -313,7 +288,7 @@ export default function App() {
       localStorage.removeItem("mindspace_offline_clinician_session");
       await signOut(auth);
       setUser(null);
-      setCachedAccessToken(null);
+      clearCachedAccessToken();
       setPortalMode("public");
       setActiveTab("agenda");
       soundFX.playPop();
@@ -770,12 +745,19 @@ export default function App() {
                     <h3 className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight animate-in fade-in slide-in-from-bottom-3 duration-500">Agenda de Horas Clínicas</h3>
                     <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-sans">Seleccione un día y bloque de horario certificado para registrar su consulta.</p>
                   </div>
-                  <BookingCalendar
-                    therapistUid={therapistUid}
-                    therapistName={therapistName}
-                    sessionPrice={sessionPrice}
-                    settings={settings}
-                  />
+                  <div className="mx-auto max-w-2xl rounded-2xl border border-amber-300 bg-amber-50 p-5 text-left text-slate-900" role="alert">
+                    <div className="flex items-start gap-3">
+                      <ShieldAlert className="mt-1 h-5 w-5 shrink-0 text-amber-700" aria-hidden="true" />
+                      <div className="space-y-2">
+                        <h4 className="font-bold">Agendamiento temporalmente pausado</h4>
+                        <p className="text-sm">
+                          Estamos implementando verificación de identidad y protección de datos.
+                          No ingreses información clínica en este formulario. Contacta directamente
+                          al consultorio para solicitar una hora.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             ) : portalMode === "patient" ? (
@@ -793,18 +775,16 @@ export default function App() {
               <div className="space-y-6 animate-in fade-in duration-200">
                 {(() => {
                   // Guard check for clinician access (Chilean Laws 19.628 & 20.584)
-                  const userEmailNormal = user?.email?.toLowerCase().trim();
-                  const isClinicianEmail = user && (
-                    userEmailNormal === "p.joseignacio@gmail.com" || 
-                    userEmailNormal === "jose.ignacio.therapist@gmail.com" ||
-                    userEmailNormal === "joseignacio.rovel@gmail.com" ||
-                    user.uid === "NDmjbTte6wa5vgeIc2JASOfNhYi1" ||
-                    !settings ||
-                    (settings.contactEmail && settings.contactEmail.toLowerCase().trim() === userEmailNormal) ||
-                    settings.ownerId === user.uid
+                  // El panel clínico requiere una sesión verificada y una identidad
+                  // de propietario explícita. La ausencia de settings nunca concede acceso.
+                  const isClinicianAccount = Boolean(
+                    user?.emailVerified &&
+                    (
+                      user.uid === AUTHORIZED_CLINICIAN_UID
+                    )
                   );
 
-                  if (user && !isClinicianEmail) {
+                  if (user && !isClinicianAccount) {
                     return (
                       <div className="max-w-md mx-auto bg-white dark:bg-slate-900 rounded-3xl border border-rose-200 dark:border-rose-950 p-8 shadow-xl text-center space-y-6 animate-in zoom-in-95 duration-300">
                         <div className="inline-flex p-3.5 bg-rose-500/10 text-rose-600 rounded-2xl border border-rose-500/20">

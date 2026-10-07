@@ -1,0 +1,106 @@
+name: Validate
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches:
+      - main
+      - codex/mindspace-security-recovery
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Type check and production build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Summarize dependency advisories
+        run: |
+          npm audit --json > audit.json || true
+          node -e 'const a=require("./audit.json"); for (const [name, v] of Object.entries(a.vulnerabilities || {})) console.log(JSON.stringify({package:name,severity:v.severity,direct:v.isDirect,range:v.range,fixAvailable:v.fixAvailable,via:v.via.map(x=>typeof x==="string"?x:{name:x.name,title:x.title,url:x.url,range:x.range})}));'
+
+      - name: Fail on high or critical dependency advisories
+        run: npm audit --audit-level=high
+
+      - name: Type check
+        run: npm run lint
+
+      - name: Build production assets
+        run: npm run build
+
+      - name: Set up Java for Firestore Emulator
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Google Cloud CLI
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Install Firestore Emulator component
+        run: gcloud components install cloud-firestore-emulator --quiet
+
+      - name: Install and audit rules test dependencies
+        run: |
+          npm --prefix tests/rules ci
+          npm audit --prefix tests/rules --audit-level=high
+
+      - name: Start Firestore Emulator with project rules
+        run: |
+          gcloud emulators firestore start --project=demo-mindspace --host-port=127.0.0.1:8080 --rules=firestore.rules > /tmp/firestore-emulator.log 2>&1 &
+          for attempt in {1..30}; do
+            if (echo > /dev/tcp/127.0.0.1/8080) 2>/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          if ! (echo > /dev/tcp/127.0.0.1/8080) 2>/dev/null; then
+            cat /tmp/firestore-emulator.log
+            exit 1
+          fi
+
+      - name: Test Firestore security rules
+        run: npm run test:rules
+
+      - name: Build Railway Docker image
+        run: |
+          docker build --tag mindspace-ci \
+            --build-arg VITE_FIREBASE_API_KEY=test-public-key \
+            --build-arg VITE_FIREBASE_AUTH_DOMAIN=demo-mindspace.firebaseapp.com \
+            --build-arg VITE_FIREBASE_PROJECT_ID=demo-mindspace \
+            --build-arg VITE_FIREBASE_APP_ID=1:123:web:test \
+            --build-arg VITE_FIREBASE_DATABASE_ID="(default)" .
+
+      - name: Smoke test production API safety gate
+        run: |
+          PORT=3910 NODE_ENV=production FIRESTORE_PROJECT_ID=demo-mindspace FIRESTORE_DATABASE_ID="(default)" node dist/server.cjs > /tmp/mindspace-server.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          for attempt in {1..20}; do
+            if curl --silent --fail http://127.0.0.1:3910/api/health > /dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          HEALTH_CODE=$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:3910/api/health)
+          API_CODE=$(curl --silent --output /dev/null --write-out '%{http_code}' --request POST --header 'Content-Type: application/json' --data '{}' http://127.0.0.1:3910/api/gemini/summarize)
+          if [ "$HEALTH_CODE" != "200" ] || [ "$API_CODE" != "503" ]; then
+            cat /tmp/mindspace-server.log
+            echo "Unexpected API safety-gate status: health=$HEALTH_CODE api=$API_CODE"
+            exit 1
+          fi
