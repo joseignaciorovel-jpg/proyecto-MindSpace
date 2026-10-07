@@ -54,11 +54,30 @@ jobs:
           distribution: temurin
           java-version: "21"
 
-      - name: Install rules test dependencies
-        run: npm --prefix tests/rules ci
+      - name: Set up Google Cloud CLI
+        uses: google-github-actions/setup-gcloud@v2
 
-      - name: Audit rules test dependencies
-        run: npm audit --prefix tests/rules --audit-level=high
+      - name: Install Firestore Emulator component
+        run: gcloud components install cloud-firestore-emulator --quiet
+
+      - name: Install and audit rules test dependencies
+        run: |
+          npm --prefix tests/rules ci
+          npm audit --prefix tests/rules --audit-level=high
+
+      - name: Start Firestore Emulator with project rules
+        run: |
+          gcloud emulators firestore start --project=demo-mindspace --host-port=127.0.0.1:8080 --rules=firestore.rules > /tmp/firestore-emulator.log 2>&1 &
+          for attempt in {1..30}; do
+            if (echo > /dev/tcp/127.0.0.1/8080) 2>/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          if ! (echo > /dev/tcp/127.0.0.1/8080) 2>/dev/null; then
+            cat /tmp/firestore-emulator.log
+            exit 1
+          fi
 
       - name: Test Firestore security rules
         run: npm run test:rules
