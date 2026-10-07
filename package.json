@@ -36,7 +36,7 @@
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",
     "vite": "^6.2.3",
-    "firebase-tools": "14.23.0"
+    "firebase-tools": "15.32.1"
   },
   "overrides": {
     "@grpc/grpc-js": "^1.14.5",
