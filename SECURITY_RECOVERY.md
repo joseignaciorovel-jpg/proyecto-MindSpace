@@ -30,6 +30,7 @@ La pausa de API deja temporalmente fuera de servicio reservas y cambios de citas
 ## Notas para Railway
 
 - No desplegar esta rama como servicio de producción clínica. Las APIs están deliberadamente pausadas y la compilación todavía debe validarse.
+- El contenedor migra a Node.js 24 LTS; Node.js 20 llegó a fin de vida el 30 de abril de 2026.
 - No subir secretos al repositorio ni al frontend. Las variables `VITE_*` quedan expuestas al navegador por diseño; solo deben contener configuración pública de Firebase.
 - La aplicación usa Firebase en frontend y Firestore Admin SDK en servidor. Antes de staging se debe demostrar que ambos apuntan al mismo proyecto y base de datos, y usar una cuenta de servicio con privilegio mínimo.
 - No configurar datos reales hasta probar las reglas en el emulador y verificar aislamiento entre cuentas.
