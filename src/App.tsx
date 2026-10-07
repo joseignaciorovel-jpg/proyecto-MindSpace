@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { onAuthStateChanged, signInWithPopup, signOut, User } from "firebase/auth";
 import { collection, query, where, orderBy, onSnapshot, doc, getDocs, getDoc, setDoc, deleteDoc, writeBatch } from "firebase/firestore";
 import { auth, googleProvider, db } from "./firebase";
+import { clearCachedAccessToken } from "./utils/googleAuth";
 import ClinicalHistoryManager from "./components/ClinicalHistoryManager";
 import ClinicianAgenda from "./components/ClinicianAgenda";
 import PaymentsLedger from "./components/PaymentsLedger";
@@ -287,7 +288,7 @@ export default function App() {
       localStorage.removeItem("mindspace_offline_clinician_session");
       await signOut(auth);
       setUser(null);
-      setCachedAccessToken(null);
+      clearCachedAccessToken();
       setPortalMode("public");
       setActiveTab("agenda");
       soundFX.playPop();
