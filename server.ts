@@ -225,9 +225,6 @@ app.post("/api/flow/create-payment", async (req, res) => {
   const flowApiUrl = await getFlowApiUrlResolved(useSandbox);
   const numAmount = price;
 
-  const hostHeader = req.get('host') || req.headers.host || "";
-  const isDevLocal = hostHeader.includes("localhost") || hostHeader.includes("127.0.0.1") || hostHeader.includes("ais-dev-") || hostHeader.includes("ais-pre-");
-
   console.log("[Flow] Solicitud de pago recibida.");
 
   if (!hasRealFlowCredentials()) {
