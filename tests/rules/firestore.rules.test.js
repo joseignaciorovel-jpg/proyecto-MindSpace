@@ -40,10 +40,10 @@ async function seed(path, data) {
 }
 
 test("solo el profesional propietario puede leer la ficha y la cita", async () => {
-  await seed("patients/patient-1", { ownerId: "clinician-1", name: "Paciente ficticio" });
-  await seed("appointments/appointment-1", { ownerId: "clinician-1", status: "pending" });
+  await seed("patients/patient-1", { ownerId: "NDmjbTte6wa5vgeIc2JASOfNhYi1", name: "Paciente ficticio" });
+  await seed("appointments/appointment-1", { ownerId: "NDmjbTte6wa5vgeIc2JASOfNhYi1", status: "pending" });
 
-  const ownerDb = testEnv.authenticatedContext("clinician-1").firestore();
+  const ownerDb = testEnv.authenticatedContext("NDmjbTte6wa5vgeIc2JASOfNhYi1").firestore();
   const otherDb = testEnv.authenticatedContext("clinician-2").firestore();
   const anonymousDb = testEnv.unauthenticatedContext().firestore();
 
@@ -59,7 +59,7 @@ test("lecturas anónimas y escrituras de paciente no autenticado se deniegan", a
   await assertFails(getDoc(doc(anonymousDb, "unknown_collection/record-1")));
   await assertFails(
     setDoc(doc(anonymousDb, "appointments/fake-appointment"), {
-      ownerId: "clinician-1",
+      ownerId: "NDmjbTte6wa5vgeIc2JASOfNhYi1",
       status: "scheduled",
     }),
   );
@@ -103,11 +103,11 @@ test("los bloques de agenda públicos no exponen citas y validan sus campos", as
     date: "2026-12-01",
     timeSlot: "10:00",
     status: "scheduled",
-    ownerId: "clinician-1",
+    ownerId: "NDmjbTte6wa5vgeIc2JASOfNhYi1",
   });
 
   const anonymousDb = testEnv.unauthenticatedContext().firestore();
-  const ownerDb = testEnv.authenticatedContext("clinician-1").firestore();
+  const ownerDb = testEnv.authenticatedContext("NDmjbTte6wa5vgeIc2JASOfNhYi1").firestore();
 
   await assertSucceeds(getDoc(doc(anonymousDb, "public_booked_slots/slot-1")));
   await assertFails(
@@ -116,7 +116,7 @@ test("los bloques de agenda públicos no exponen citas y validan sus campos", as
       date: "2026-12-01",
       timeSlot: "11:00",
       status: "scheduled",
-      ownerId: "clinician-1",
+      ownerId: "NDmjbTte6wa5vgeIc2JASOfNhYi1",
       patientName: "No debe publicarse",
     }),
   );
@@ -126,18 +126,18 @@ test("los bloques de agenda públicos no exponen citas y validan sus campos", as
       date: "2026-12-01",
       timeSlot: "11:00",
       status: "scheduled",
-      ownerId: "clinician-1",
+      ownerId: "NDmjbTte6wa5vgeIc2JASOfNhYi1",
     }),
   );
 });
 
 test("los logs de auditoría no se pueden editar ni borrar desde cliente", async () => {
   await seed("audit_logs/log-1", {
-    ownerId: "clinician-1",
+    ownerId: "NDmjbTte6wa5vgeIc2JASOfNhYi1",
     action: "read",
   });
 
-  const ownerDb = testEnv.authenticatedContext("clinician-1").firestore();
+  const ownerDb = testEnv.authenticatedContext("NDmjbTte6wa5vgeIc2JASOfNhYi1").firestore();
   const logRef = doc(ownerDb, "audit_logs/log-1");
 
   await assertSucceeds(getDoc(logRef));
