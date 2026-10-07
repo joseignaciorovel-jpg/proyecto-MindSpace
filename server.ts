@@ -228,15 +228,7 @@ app.post("/api/flow/create-payment", async (req, res) => {
   const hostHeader = req.get('host') || req.headers.host || "";
   const isDevLocal = hostHeader.includes("localhost") || hostHeader.includes("127.0.0.1") || hostHeader.includes("ais-dev-") || hostHeader.includes("ais-pre-");
 
-  console.log("=================== [Flow Payment Verbose Diagnostic] ===================");
-  console.log(`- Request Host Header: "${hostHeader}"`);
-  console.log(`- Detected isDevLocal: ${isDevLocal}`);
-  console.log(`- Client body 'useSandbox': ${useSandbox}`);
-  console.log(`- FLOW_API_KEY exists: ${!!flowApiKey} (Length: ${flowApiKey.length})`);
-  console.log(`- FLOW_SECRET_KEY exists: ${!!flowSecretKey} (Length: ${flowSecretKey.length})`);
-  console.log(`- hasRealFlowCredentials(): ${hasRealFlowCredentials()}`);
-  console.log(`- Target Flow URL: "${flowApiUrl}/payment/create"`);
-  console.log("========================================================================");
+  console.log("[Flow] Solicitud de pago recibida.");
 
   if (!hasRealFlowCredentials()) {
     return res.status(400).json({
@@ -309,7 +301,7 @@ app.post("/api/flow/create-payment", async (req, res) => {
     }
 
     const flowResult = (await response.json()) as { url: string; token: string; flowOrder: number };
-    console.log("[Flow Real API] Link de pago creado exitosamente:", flowResult);
+    console.log("[Flow Real API] Link de pago creado.");
 
     return res.json({
       success: true,
@@ -799,25 +791,7 @@ function getGeminiClient(): GoogleGenAI {
   return aiClient;
 }
 
-// REST APIs
-app.get("/api/env-check", (req, res) => {
-  const k = (process.env.FLOW_API_KEY || "").trim();
-  const s = (process.env.FLOW_SECRET_KEY || "").trim();
-  res.json({
-    flow_api_key_largo: k.length,
-    flow_api_key_preview: k.length > 0 ? `${k.substring(0, Math.min(4, k.length))}...${k.substring(Math.max(0, k.length - 3))}` : "VACÍO ❌",
-    flow_secret_key_largo: s.length,
-    flow_secret_key_preview: s.length > 0 ? `${s.substring(0, Math.min(4, s.length))}...${s.substring(Math.max(0, s.length - 3))}` : "VACÍO ❌",
-    has_real_credentials: hasRealFlowCredentials(),
-    flow_api_url: process.env.FLOW_API_URL || "no configurada",
-    node_env: process.env.NODE_ENV,
-  });
-});
-
-app.get("/api/health", (req, res) => {
-  res.json({ status: "healthy", timestamp: new Date().toISOString() });
-});
-
+// Legacy routes below are blocked by the migration guard until replaced.
 // ElevenLabs status check
 app.get("/api/elevenlabs/status", (req, res) => {
   const apiKey = process.env.ELEVENLABS_API_KEY;
