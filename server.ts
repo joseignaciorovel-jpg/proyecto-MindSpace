@@ -10,15 +10,7 @@ import { z } from "zod";
 // Load environment variables
 dotenv.config();
 
-// === DIAGNÓSTICO DE ARRANQUE ===
-const _diagFlowKey = (process.env.FLOW_API_KEY || "").trim();
-const _diagFlowSecret = (process.env.FLOW_SECRET_KEY || "").trim();
-console.log("=== DIAGNÓSTICO DE VARIABLES DE ENTORNO AL ARRANQUE ===");
-console.log(`FLOW_API_KEY: largo=${_diagFlowKey.length}, vacío=${_diagFlowKey.length === 0}, primeros4="${_diagFlowKey.substring(0, Math.min(4, _diagFlowKey.length))}"`);
-console.log(`FLOW_SECRET_KEY: largo=${_diagFlowSecret.length}, vacío=${_diagFlowSecret.length === 0}`);
-console.log(`NODE_ENV: ${process.env.NODE_ENV}`);
-console.log("=======================================================");
-
+// Nunca registrar fragmentos, longitudes ni valores de secretos.
 // ================================================================
 // 1. INICIALIZACIÓN DE FIRESTORE (SDK OFICIAL)
 // ================================================================
@@ -192,8 +184,24 @@ function hasRealFlowCredentials(): boolean {
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: "1mb" }));
+app.use(express.urlencoded({ extended: true, limit: "1mb" }));
+
+// Bloqueo temporal de APIs heredadas mientras se migran a autenticación,
+// autorización por paciente, validación de pagos y minimización de datos.
+// La interfaz estática puede revisarse, pero no debe operar con datos clínicos
+// ni cobros hasta que cada ruta tenga controles y pruebas propios.
+app.get("/api/health", (_req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  return res.status(200).json({ status: "ok" });
+});
+app.use("/api", (_req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  return res.status(503).json({
+    error: "API temporalmente deshabilitada durante la migración de seguridad.",
+    code: "SECURITY_MIGRATION_IN_PROGRESS",
+  });
+});
 
 // ================================================================
 // 6. ENDPOINTS DE FLOW (con validación Zod)
