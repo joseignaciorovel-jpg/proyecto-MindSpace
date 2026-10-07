@@ -26,8 +26,10 @@ jobs:
           node-version: 24
           cache: npm
 
-      - name: Resolve dependency lockfile
-        run: npm install --package-lock-only
+      - name: Resolve dependency lockfiles
+        run: |
+          npm install --package-lock-only
+          npm install --package-lock-only --prefix tests/rules
 
       - name: Install locked dependencies
         run: npm ci
@@ -51,6 +53,12 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
+
+      - name: Install rules test dependencies
+        run: npm --prefix tests/rules ci
+
+      - name: Audit rules test dependencies
+        run: npm audit --prefix tests/rules --audit-level=high
 
       - name: Test Firestore security rules
         run: npm run test:rules
@@ -82,3 +90,14 @@ jobs:
             echo "Unexpected API safety-gate status: health=$HEALTH_CODE api=$API_CODE"
             exit 1
           fi
+
+      - name: Preserve reviewed lockfiles
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: validated-lockfiles
+          path: |
+            package-lock.json
+            tests/rules/package-lock.json
+          if-no-files-found: error
+          retention-days: 3
