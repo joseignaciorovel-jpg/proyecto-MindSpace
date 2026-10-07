@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { onAuthStateChanged, signInWithPopup, signOut, User, GoogleAuthProvider } from "firebase/auth";
+import { onAuthStateChanged, signInWithPopup, signOut, User } from "firebase/auth";
 import { collection, query, where, orderBy, onSnapshot, doc, getDocs, getDoc, setDoc, deleteDoc, writeBatch } from "firebase/firestore";
 import { auth, googleProvider, db } from "./firebase";
 import ClinicalHistoryManager from "./components/ClinicalHistoryManager";
@@ -17,7 +17,7 @@ import { TermsOfServiceModal, PrivacyPolicyModal } from "./components/LegalModal
 import { soundFX } from "./utils/soundFX";
 import { motion, AnimatePresence } from "motion/react";
 import { Calendar, BookOpen, CreditCard, LogIn, LogOut, Video, Heart, Globe, Settings, Lock, Sparkles, MessageSquare, ShieldCheck, Clipboard, Star, Share2, ChevronLeft, ChevronRight, Sun, Moon, Phone, Smile, ShieldAlert, Activity, Clock, ChevronDown, Volume2, VolumeX } from "lucide-react";
-import { setCachedAccessToken } from "./utils/googleAuth";
+const AUTHORIZED_CLINICIAN_UID = "NDmjbTte6wa5vgeIc2JASOfNhYi1";
 
 const formatReviewDate = (createdAt: any) => {
   if (!createdAt) return "Reciente";
@@ -165,9 +165,15 @@ export default function App() {
 
   // Listen for dynamic settings (profile, pricing, hours, channels)
   useEffect(() => {
-    // We bind all clinic records to the logged-in user's UID.
-    // If not logged in, we set the helper fallback "NDmjbTte6wa5vgeIc2JASOfNhYi1" so public guest sessions sync seamlessly.
-    const targetUid = user ? user.uid : "NDmjbTte6wa5vgeIc2JASOfNhYi1";
+    // Solo el profesional provisionado obtiene suscripciones a datos de consultorio.
+    // Las cuentas nuevas no pueden autoasignarse acceso clínico.
+    if (!user || !user.emailVerified || user.uid !== AUTHORIZED_CLINICIAN_UID) {
+      setTherapistUid("");
+      setSettings(null);
+      return;
+    }
+
+    const targetUid = user.uid;
     setTherapistUid(targetUid);
     
     const docRef = doc(db, "settings", targetUid);
@@ -194,7 +200,7 @@ export default function App() {
       }
       handleMergeAndSet();
     }, (error) => {
-      console.warn("Could not load dynamic public settings: ", error.message);
+      console.warn("Could not load dynamic public settings.", error.code || "unknown");
     });
 
     let unsubPrivate = () => {};
@@ -208,11 +214,8 @@ export default function App() {
         }
         handleMergeAndSet();
       }, (error) => {
-        console.warn("Could not load secure settings: ", error.message);
+        console.warn("Could not load secure settings.", error.code || "unknown");
       });
-    } else {
-      privateData = null;
-      handleMergeAndSet();
     }
 
     return () => {
@@ -264,17 +267,7 @@ export default function App() {
   const handleLoginGoogle = async () => {
     setAuthError(null);
     try {
-      // Configure scopes for Gmail sending support
-      googleProvider.addScope("https://www.googleapis.com/auth/gmail.send");
-      
-      const result = await signInWithPopup(auth, googleProvider);
-      const credential = GoogleAuthProvider.credentialFromResult(result);
-      if (credential?.accessToken) {
-        setCachedAccessToken(credential.accessToken);
-        console.log("[Google Auth]: Token retrieved and cached successfully.");
-      } else {
-        console.warn("[Google Auth]: No access token returned in the credential payload.");
-      }
+      await signInWithPopup(auth, googleProvider);
     } catch (err: any) {
       console.error("Specialist Google Authentication error:", err);
       let errorMsg = "Hubo un problema al ingresar con Google. Por favor, intente de nuevo.";
@@ -786,8 +779,7 @@ export default function App() {
                   const isClinicianAccount = Boolean(
                     user?.emailVerified &&
                     (
-                      user.uid === "NDmjbTte6wa5vgeIc2JASOfNhYi1" ||
-                      settings?.ownerId === user.uid
+                      user.uid === AUTHORIZED_CLINICIAN_UID
                     )
                   );
 
