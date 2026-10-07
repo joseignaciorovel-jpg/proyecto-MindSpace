@@ -12,14 +12,18 @@ service cloud.firestore {
     // Compatibilidad temporal con documentos antiguos del profesional.
     // El UID real debe estar autenticado; el identificador antiguo no es
     // una credencial y no autoriza a otros usuarios.
-    function isOwner(ownerId) {
+    // Acceso temporal de un único titular hasta implementar un flujo
+    // administrativo de invitación y asignación de roles.
+    function isAuthorizedClinician() {
       return request.auth != null &&
+        request.auth.uid == "NDmjbTte6wa5vgeIc2JASOfNhYi1";
+    }
+
+    function isOwner(ownerId) {
+      return isAuthorizedClinician() &&
         (
           request.auth.uid == ownerId ||
-          (
-            request.auth.uid == "NDmjbTte6wa5vgeIc2JASOfNhYi1" &&
-            ownerId == "default_psychologist_uid_123"
-          )
+          ownerId == "default_psychologist_uid_123"
         );
     }
 
