@@ -74,7 +74,10 @@ service cloud.firestore {
     // protegida antes de publicarse.
     match /reviews/{reviewId} {
       allow read: if resource.data.publicConsent == true;
-      allow create, update, delete: if isOwner(request.resource.data.ownerId);
+      allow create: if isOwner(request.resource.data.ownerId);
+      allow update: if isOwner(resource.data.ownerId) &&
+        request.resource.data.ownerId == resource.data.ownerId;
+      allow delete: if isOwner(resource.data.ownerId);
     }
 
     // El diario de ánimo contiene datos de salud. El flujo actual no acredita
