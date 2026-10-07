@@ -43,6 +43,15 @@ jobs:
       - name: Build production assets
         run: npm run build
 
+      - name: Build Railway Docker image
+        run: |
+          docker build --tag mindspace-ci \
+            --build-arg VITE_FIREBASE_API_KEY=test-public-key \
+            --build-arg VITE_FIREBASE_AUTH_DOMAIN=demo-mindspace.firebaseapp.com \
+            --build-arg VITE_FIREBASE_PROJECT_ID=demo-mindspace \
+            --build-arg VITE_FIREBASE_APP_ID=1:123:web:test \
+            --build-arg VITE_FIREBASE_DATABASE_ID="(default)" .
+
       - name: Smoke test production API safety gate
         run: |
           PORT=3910 NODE_ENV=production FIRESTORE_PROJECT_ID=demo-mindspace FIRESTORE_DATABASE_ID="(default)" node dist/server.cjs > /tmp/mindspace-server.log 2>&1 &
