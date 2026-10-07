@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import { onAuthStateChanged, signInWithPopup, signOut, User, GoogleAuthProvider } from "firebase/auth";
 import { collection, query, where, orderBy, onSnapshot, doc, getDocs, getDoc, setDoc, deleteDoc, writeBatch } from "firebase/firestore";
 import { auth, googleProvider, db } from "./firebase";
-import BookingCalendar from "./components/BookingCalendar";
 import ClinicalHistoryManager from "./components/ClinicalHistoryManager";
 import ClinicianAgenda from "./components/ClinicianAgenda";
 import PaymentsLedger from "./components/PaymentsLedger";
@@ -752,12 +751,19 @@ export default function App() {
                     <h3 className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight animate-in fade-in slide-in-from-bottom-3 duration-500">Agenda de Horas Clínicas</h3>
                     <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-sans">Seleccione un día y bloque de horario certificado para registrar su consulta.</p>
                   </div>
-                  <BookingCalendar
-                    therapistUid={therapistUid}
-                    therapistName={therapistName}
-                    sessionPrice={sessionPrice}
-                    settings={settings}
-                  />
+                  <div className="mx-auto max-w-2xl rounded-2xl border border-amber-300 bg-amber-50 p-5 text-left text-slate-900" role="alert">
+                    <div className="flex items-start gap-3">
+                      <ShieldAlert className="mt-1 h-5 w-5 shrink-0 text-amber-700" aria-hidden="true" />
+                      <div className="space-y-2">
+                        <h4 className="font-bold">Agendamiento temporalmente pausado</h4>
+                        <p className="text-sm">
+                          Estamos implementando verificación de identidad y protección de datos.
+                          No ingreses información clínica en este formulario. Contacta directamente
+                          al consultorio para solicitar una hora.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             ) : portalMode === "patient" ? (
