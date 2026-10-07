@@ -4,30 +4,31 @@ Estado al 7 de octubre de 2026. Esta rama es una etapa de contención y migraci�
 
 ## Contención aplicada en esta rama
 
-- Firestore deniega por defecto y limita citas, pacientes e historias al profesional propietario autenticado.
+- Firestore deniega por defecto y limita citas, pacientes e historias al único UID de profesional provisionado; una cuenta nueva no puede asignarse el rol desde el cliente.
 - Se eliminó la lectura pública de citas y la escritura anónima de diarios de ánimo.
 - El portal de pacientes deja de aceptar RUT/correo como prueba de identidad; limpia las credenciales que guardaba en localStorage y muestra una pausa de servicio.
 - El servidor limita el cuerpo JSON/URL-encoded y deja disponible únicamente `GET /api/health`. Las demás rutas API responden 503 durante la migración.
 - La edición de reseñas conserva la propiedad original y la eliminación valida el documento existente.
+- Se quitó el permiso OAuth de Gmail del login, se borran tokens antiguos de `sessionStorage` y el envío de correos desde el navegador queda desactivado.
 
 ## Validación de esta rama
 
-GitHub Actions pasó en Node 24: `npm ci`, auditoría de dependencias principal (0 avisos) y del paquete aislado de pruebas (0 avisos), `npm run lint`, `npm run build`, seis pruebas de reglas en Firestore Emulator, construcción Docker y smoke test de API (`/api/health` 200; API heredada 503). El lockfile del paquete de reglas está versionado para que CI use instalaciones reproducibles.
+GitHub Actions pasó en Node 24: instalaciones reproducibles con `npm ci`, auditoría de dependencias principal y del paquete aislado de pruebas (0 avisos cada una), `npm run lint`, `npm run build`, siete pruebas de reglas en Firestore Emulator, construcción Docker y smoke test de API (`/api/health` 200; API heredada 503).
 
-Las pruebas del emulador verifican aislamiento por propietario, denegación anónima y por defecto, el acceso heredado limitado, el consentimiento de reseñas, los campos públicos minimizados de agenda y la inmutabilidad de auditoría desde cliente. El emulador no sustituye pruebas de configuración, índices o comportamiento en la base real.
+Las pruebas cubren aislamiento por propietario, denegación anónima y por defecto, acceso heredado limitado, reseñas con consentimiento, campos públicos minimizados de agenda, auditoría no editable desde cliente y bloqueo del autoaprovisionamiento de profesionales.
 
-No se han probado operaciones contra una base aislada. Autenticación individual de pacientes, privacidad operacional, copias/restauración y flujos clínicos siguen sin validar. CI demuestra el cierre de las APIs heredadas, la compilación y estas propiedades concretas de las reglas; no demuestra que el sistema esté listo para pacientes.
+El emulador no sustituye pruebas de índices, configuración o comportamiento en una base real. No se han probado operaciones contra una base aislada. La autenticación individual de pacientes, la privacidad operacional, las copias/restauración y los flujos clínicos siguen sin validar. CI demuestra el cierre de las APIs heredadas, la compilación y estas propiedades concretas; no demuestra que el sistema esté listo para pacientes.
 
 ## Funciones que siguen bloqueadas
 
-La pausa de API deja temporalmente fuera de servicio reservas y cambios de citas, cobros Flow, recibos, IA/Gemini, firma de llamadas y pagos simulados. No usar la interfaz actual para atender pacientes, registrar evoluciones, cobrar ni gestionar urgencias. El bloqueo es intencional: las rutas antiguas no verifican de forma suficiente identidad, permisos, estado de pago o integridad de los datos.
+La pausa de API deja temporalmente fuera de servicio reservas y cambios de citas, cobros Flow, recibos, IA/Gemini, firma de llamadas y pagos simulados. El correo automático con Gmail también está pausado. No usar la interfaz actual para atender pacientes, registrar evoluciones, cobrar ni gestionar urgencias. Las rutas antiguas no verifican de forma suficiente identidad, permisos, estado de pago o integridad de los datos.
 
 ## Hitos y criterios de salida
 
 | Hito | Trabajo | Criterio para continuar |
 |---|---|---|
 | 0. Contención | Reglas estrictas, bloquear rutas inseguras y retirar la falsa autenticación del portal. | **Validado en el emulador para los casos cubiertos;** ampliar pruebas al modelo completo antes de reabrir accesos. |
-| 1. Identidad y acceso | Firebase Auth individual para profesional y pacientes; recuperación de cuenta; sesión con expiración; autorización por titular en servidor/reglas. | Pruebas negativas: RUT/correo ajenos, UID manipulado, enumeración y acceso entre pacientes no entregan información. |
+| 1. Identidad y acceso | Acceso del profesional limitado a un UID provisionado. Falta diseñar Firebase Auth individual para pacientes, recuperación de cuenta y vínculos paciente-profesional con autorización por titular. | Pruebas negativas: cuentas no provisionadas, RUT/correo ajenos, UID manipulado, enumeración y acceso entre pacientes no entregan información. |
 | 2. Ficha clínica | Separar datos administrativos y clínicos; validación de esquema; bitácora inmutable de accesos/cambios; exportación, retención y procedimiento de incidentes. | Pruebas de permisos, trazabilidad, respaldo cifrado y recuperación documentada. |
 | 3. Reservas y pagos | Reserva atómica en backend; tarifa desde configuración confiable; callback Flow con firma/verificación oficial e idempotencia; recibos con autorización. | Pruebas de repetición, monto alterado, cita ajena, callback falso y reembolso/conciliación. Sin documentos tributarios simulados. |
 | 4. IA y videollamada | IA administrativa/clínica con consentimiento, minimización, controles de proveedor y retención; videollamada con proveedor real y credenciales efímeras. | Evaluación clínica/privacidad, control de acceso, borrado/retención y límites de uso; IA no sustituye juicio profesional. |
