@@ -144,3 +144,20 @@ test("los logs de auditoría no se pueden editar ni borrar desde cliente", async
   await assertFails(updateDoc(logRef, { action: "rewritten" }));
   await assertFails(deleteDoc(logRef));
 });
+
+test("un usuario no provisionado no puede autoasignarse rol de profesional", async () => {
+  const unprovisionedDb = testEnv.authenticatedContext("clinician-2").firestore();
+
+  await assertFails(
+    setDoc(doc(unprovisionedDb, "settings/clinician-2"), {
+      ownerId: "clinician-2",
+      therapistName: "Profesional no provisionado",
+    }),
+  );
+  await assertFails(
+    setDoc(doc(unprovisionedDb, "patients/fake-patient"), {
+      ownerId: "clinician-2",
+      name: "Paciente ficticio",
+    }),
+  );
+});
