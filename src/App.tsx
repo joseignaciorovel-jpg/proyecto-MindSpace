@@ -777,7 +777,7 @@ export default function App() {
                   // Guard check for clinician access (Chilean Laws 19.628 & 20.584)
                   // El panel clínico requiere una sesión verificada y una identidad
                   // de propietario explícita. La ausencia de settings nunca concede acceso.
-                  const isClinicianEmail = Boolean(
+                  const isClinicianAccount = Boolean(
                     user?.emailVerified &&
                     (
                       user.uid === "NDmjbTte6wa5vgeIc2JASOfNhYi1" ||
@@ -785,7 +785,7 @@ export default function App() {
                     )
                   );
 
-                  if (user && !isClinicianEmail) {
+                  if (user && !isClinicianAccount) {
                     return (
                       <div className="max-w-md mx-auto bg-white dark:bg-slate-900 rounded-3xl border border-rose-200 dark:border-rose-950 p-8 shadow-xl text-center space-y-6 animate-in zoom-in-95 duration-300">
                         <div className="inline-flex p-3.5 bg-rose-500/10 text-rose-600 rounded-2xl border border-rose-500/20">
