@@ -26,9 +26,6 @@ jobs:
           node-version: 24
           cache: npm
 
-      - name: Resolve dependency lockfile
-        run: npm update --package-lock-only
-
       - name: Install locked dependencies
         run: npm ci
 
@@ -37,17 +34,30 @@ jobs:
           npm audit --json > audit.json || true
           node -e 'const a=require("./audit.json"); for (const [name, v] of Object.entries(a.vulnerabilities || {})) console.log(JSON.stringify({package:name,severity:v.severity,direct:v.isDirect,range:v.range,fixAvailable:v.fixAvailable,via:v.via.map(x=>typeof x==="string"?x:{name:x.name,title:x.title,url:x.url,range:x.range})}));'
 
+      - name: Fail on high or critical dependency advisories
+        run: npm audit --audit-level=high
+
       - name: Type check
         run: npm run lint
 
       - name: Build production assets
         run: npm run build
 
-      - name: Preserve reviewed lockfile
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: validated-package-lock
-          path: package-lock.json
-          if-no-files-found: error
-          retention-days: 3
+      - name: Smoke test production API safety gate
+        run: |
+          PORT=3910 NODE_ENV=production FIRESTORE_PROJECT_ID=demo-mindspace FIRESTORE_DATABASE_ID="(default)" node dist/server.cjs > /tmp/mindspace-server.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          for attempt in {1..20}; do
+            if curl --silent --fail http://127.0.0.1:3910/api/health > /dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          HEALTH_CODE=$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:3910/api/health)
+          API_CODE=$(curl --silent --output /dev/null --write-out '%{http_code}' --request POST --header 'Content-Type: application/json' --data '{}' http://127.0.0.1:3910/api/gemini/summarize)
+          if [ "$HEALTH_CODE" != "200" ] || [ "$API_CODE" != "503" ]; then
+            cat /tmp/mindspace-server.log
+            echo "Unexpected API safety-gate status: health=$HEALTH_CODE api=$API_CODE"
+            exit 1
+          fi
