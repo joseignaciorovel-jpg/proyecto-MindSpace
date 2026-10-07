@@ -12,9 +12,11 @@ Estado al 7 de octubre de 2026. Esta rama es una etapa de contención y migraci�
 
 ## Validación de esta rama
 
-El 7 de octubre de 2026, GitHub Actions ejecutó correctamente `npm ci`, `npm audit` (0 vulnerabilidades según el advisory feed de esa fecha), `npm run lint`, `npm run build`, construcción de la imagen Docker y una prueba de humo en Node 24 que confirma que `/api/health` responde 200 y una API heredada responde 503.
+GitHub Actions pasó en Node 24: `npm ci`, auditoría de dependencias principal (0 avisos) y del paquete aislado de pruebas (0 avisos), `npm run lint`, `npm run build`, seis pruebas de reglas en Firestore Emulator, construcción Docker y smoke test de API (`/api/health` 200; API heredada 503). El lockfile del paquete de reglas está versionado para que CI use instalaciones reproducibles.
 
-Aún **no** se han probado las reglas de Firestore en Emulator ni se han probado operaciones contra una base de datos aislada. La privacidad, las copias/restauración, la autenticación y los flujos clínicos tampoco están validados. El resultado de CI solo demuestra que esta etapa compila, construye y mantiene cerradas las APIs heredadas.
+Las pruebas del emulador verifican aislamiento por propietario, denegación anónima y por defecto, el acceso heredado limitado, el consentimiento de reseñas, los campos públicos minimizados de agenda y la inmutabilidad de auditoría desde cliente. El emulador no sustituye pruebas de configuración, índices o comportamiento en la base real.
+
+No se han probado operaciones contra una base aislada. Autenticación individual de pacientes, privacidad operacional, copias/restauración y flujos clínicos siguen sin validar. CI demuestra el cierre de las APIs heredadas, la compilación y estas propiedades concretas de las reglas; no demuestra que el sistema esté listo para pacientes.
 
 ## Funciones que siguen bloqueadas
 
@@ -24,7 +26,7 @@ La pausa de API deja temporalmente fuera de servicio reservas y cambios de citas
 
 | Hito | Trabajo | Criterio para continuar |
 |---|---|---|
-| 0. Contención | Reglas estrictas, bloquear rutas inseguras y retirar la falsa autenticación del portal. | Reglas revisadas con pruebas que demuestren denegación por defecto y aislamiento entre pacientes/profesional. |
+| 0. Contención | Reglas estrictas, bloquear rutas inseguras y retirar la falsa autenticación del portal. | **Validado en el emulador para los casos cubiertos;** ampliar pruebas al modelo completo antes de reabrir accesos. |
 | 1. Identidad y acceso | Firebase Auth individual para profesional y pacientes; recuperación de cuenta; sesión con expiración; autorización por titular en servidor/reglas. | Pruebas negativas: RUT/correo ajenos, UID manipulado, enumeración y acceso entre pacientes no entregan información. |
 | 2. Ficha clínica | Separar datos administrativos y clínicos; validación de esquema; bitácora inmutable de accesos/cambios; exportación, retención y procedimiento de incidentes. | Pruebas de permisos, trazabilidad, respaldo cifrado y recuperación documentada. |
 | 3. Reservas y pagos | Reserva atómica en backend; tarifa desde configuración confiable; callback Flow con firma/verificación oficial e idempotencia; recibos con autorización. | Pruebas de repetición, monto alterado, cita ajena, callback falso y reembolso/conciliación. Sin documentos tributarios simulados. |
@@ -35,10 +37,10 @@ La pausa de API deja temporalmente fuera de servicio reservas y cambios de citas
 
 ## Notas para Railway
 
-- No desplegar esta rama como servicio de producción clínica. Las APIs están deliberadamente pausadas y la compilación todavía debe validarse.
+- No desplegar esta rama como servicio de producción clínica. Las APIs están deliberadamente pausadas.
 - El contenedor migra a Node.js 24 LTS; Node.js 20 llegó a fin de vida el 30 de abril de 2026.
 - No subir secretos al repositorio ni al frontend. Las variables `VITE_*` quedan expuestas al navegador por diseño; solo deben contener configuración pública de Firebase.
 - La aplicación usa Firebase en frontend y Firestore Admin SDK en servidor. Antes de staging se debe demostrar que ambos apuntan al mismo proyecto y base de datos, y usar una cuenta de servicio con privilegio mínimo.
-- No configurar datos reales hasta probar las reglas en el emulador y verificar aislamiento entre cuentas.
+- No configurar datos reales hasta completar identidad, pruebas de permisos por paciente y respaldo/restauración.
 
 Este documento es una lista de trabajo técnica, no una certificación de seguridad ni una interpretación legal. La revisión clínica, de privacidad y legal debe confirmar las obligaciones aplicables al caso concreto.
